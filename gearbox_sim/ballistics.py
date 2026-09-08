@@ -9,7 +9,10 @@
      限制压力上升（大内径缸下该效应显著，不能按"先压满再膨胀"算）；
   4. 活塞到达缸头（撞击）后容积只随水弹前进增大，气压绝热下降，
      降到大气压后水弹不再受推力（对应"有效推力行程"）；
-  5. 管径-弹径间隙泄气、其他损耗用泄气损失 + 气动效率折减末动能。
+  5. 管径-弹径间隙泄气、其他损耗用泄气损失 + 气动效率折减末动能；
+  6. 撞击后天梯（活塞）反弹回位按主弹簧-活塞简谐模型：回弹速度 = 回弹系数
+     × 撞击速度，复位时间 = 2·atan(v_r/(ω·x0))/ω（ω=√(k/m)，x0=撞击时
+     弹簧压缩量=预压）——刚度/压缩长度越大复位越快，撞击越重复位越久。
 
 积分步长 2μs，输出初速、撞击时刻/速度、出膛时刻、回位裕量等。
 """
@@ -37,12 +40,34 @@ class Ballistics:
     gap_mm: float            # 管径-弹径单边间隙
     strike_ms: float         # 活塞撞击气缸头时刻（绝对，相对本循环扇齿 0° 基准）
     v_impact_m_s: float      # 撞击时活塞剩余速度（气垫缓冲后）
+    v_rebound_m_s: float     # 撞击后反弹速度（回弹系数 × 撞击速度）
     t_fire_ms: float         # 前冲时间（释放→撞击）
     t_settle_ms: float       # 撞击后回位稳定时间
     settle_done_ms: float    # 回位稳定完成时刻（绝对）
     return_margin_ms: float  # 回位裕量 = 下一循环拾取 − 回位稳定完成
     exit_ms: float           # 水弹出膛时刻（估算，绝对）
     p_rise_ms: Optional[float]  # 弹后压力显著建立时刻（绝对）；None=本行程无有效压气
+
+
+def settle_time_ms(v_impact_m_s: float, k_n_m: float, preload_m: float,
+                   piston_mass_kg: float, restitution: float,
+                   floor_ms: float = 2.0) -> float:
+    """天梯复位（回位稳定）时间：主弹簧-活塞简谐回位模型。
+
+    撞击后天梯以 v_r = 回弹系数×撞击速度 反弹，主弹簧（刚度 k、撞击时
+    压缩量 = 预压 x0）使其做简谐回位，复位时间：
+        t = 2·atan(v_r/(ω·x0))/ω，ω = √(k/m)
+    * 弹簧刚度 k 越大 → ω 越大 → 复位越快（同撞击条件下）；
+    * 压缩长度（撞击时弹簧压缩量 = 预压 x0）越大 → 复位越快；
+    * 撞击越重（v_r 大）→ 复位越久（t 随 v_r 单调增大，上限 π/ω）。
+    注意：整枪对比时刚度更大的弹簧撞得也更重（v_imp 更高），净效果可能
+    相互抵消——方向性应在同撞击速度下比较。
+    """
+    v_r = restitution * v_impact_m_s
+    omega = math.sqrt(k_n_m / piston_mass_kg) if piston_mass_kg > 0 else 0.0
+    if v_r > 0 and omega > 0 and preload_m > 1e-9:
+        return max(floor_ms, 2000.0 * math.atan(v_r / (omega * preload_m)) / omega)
+    return floor_ms  # 无反弹或参数退化（预压被覆盖为 0 等）：按下限处理
 
 
 def compute(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn) -> Ballistics:
@@ -132,8 +157,10 @@ def compute(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn) -> Ballistics:
     v_m_s = math.sqrt(2.0 * energy_j / m_b) if energy_j > 0 else 0.0
 
     t_fire_ms = strike_t * 1000.0
-    # 回位稳定：撞击越重回弹越久（经验：0.5 ms per m/s 撞击速度，下限 2 ms）
-    t_settle_ms = max(2.0, 0.5 * v_imp)
+    # 回位稳定（天梯复位）：模型见 settle_time_ms（刚度/预压影响复位速度）
+    v_reb = dev.piston_head_restitution * v_imp
+    t_settle_ms = settle_time_ms(v_imp, k, x0, m_p,
+                                 dev.piston_head_restitution)
     strike_abs = tl.release_ms + t_fire_ms
     settle_done = strike_abs + t_settle_ms
     margin = tl.next_pickup_ms - settle_done
@@ -148,7 +175,7 @@ def compute(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn) -> Ballistics:
         swept_cm3=A_cyl * s * f * 1e6,  # m³ → cm³
         useful_stroke_mm=useful * 1000.0,
         leak_ratio=leak, gap_mm=gap,
-        strike_ms=strike_abs, v_impact_m_s=v_imp,
+        strike_ms=strike_abs, v_impact_m_s=v_imp, v_rebound_m_s=v_reb,
         t_fire_ms=t_fire_ms, t_settle_ms=t_settle_ms,
         settle_done_ms=settle_done, return_margin_ms=margin,
         exit_ms=exit_abs, p_rise_ms=p_rise_abs,
@@ -160,7 +187,7 @@ def _degenerate(tl: Timeline) -> Ballistics:
     return Ballistics(
         v_m_s=0.0, energy_j=0.0, p_max_kpa=101.3, swept_cm3=0.0,
         useful_stroke_mm=0.0, leak_ratio=0.0, gap_mm=0.0,
-        strike_ms=tl.release_ms, v_impact_m_s=0.0,
+        strike_ms=tl.release_ms, v_impact_m_s=0.0, v_rebound_m_s=0.0,
         t_fire_ms=0.0, t_settle_ms=2.0,
         settle_done_ms=tl.release_ms + 2.0,
         return_margin_ms=tl.next_pickup_ms - tl.release_ms - 2.0,

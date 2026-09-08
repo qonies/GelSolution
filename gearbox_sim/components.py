@@ -34,14 +34,18 @@ class DeviceParams:
     cam_return_end_deg: float = 164.4     # 【估算】推嘴回位完成（气密就位）
 
     # ---- 活塞与弹簧（LDX 1.0 二号波基准）----
-    # 弹簧实测：自由长 160~175mm，安装后预压至 100~105mm（预压 55~75mm），
-    #           运行最大压缩至 40~45mm（对应活塞满行程 60.5mm）；
+    # 弹簧实测：自由长 160~175mm，安装后预压至 100~105mm（预压 55~75mm）；
+    #           满压长度按「装配长 − 行程」推算（✅用户更正：原独立实测 40~45mm
+    #           可能有误，应以齿轮实际拉过天梯的行程派生）；
     #           M85~M90 刚度 ≈0.55~0.65 N/mm，M100~M110 ≈0.70~0.85 N/mm
     piston_full_stroke_mm: float = 60.5  # 【实测】活塞最大压缩行程 ≈60.5mm
     spring_free_length_mm: float = 165.0    # 【实测区间中值】弹簧自由长度
     spring_installed_length_mm: float = 102.5  # 【实测区间中值】安装后长度（预压 = 自由 − 装配 ≈ 62.5mm）
-    spring_compressed_length_mm: float = 42.5  # 【实测区间中值】满压长度（装配长 − 满压长 ≈ 行程）
+    spring_compressed_length_mm: float = 42.0  # 【推算】满行程时满压长度 = 装配长 − 满行程（102.5 − 60.5）；
+                                               # 实际拉满长度随切齿行程派生 = 装配长 − 实际行程
     piston_mass_g: float = 20.0           # 【估算】活塞组件质量（借用AEG值，建议电子秤实测）
+    piston_head_restitution: float = 0.5  # 【估算】撞击回弹系数：天梯撞缸头后的反弹速度比
+                                          # （回位稳定模型 v_r = 系数 × 撞击速度；回弹越猛复位越久）
     spring_preload_mm: float = 62.5       # 【推算】弹簧预压量 = 自由长 − 装配长（原 5mm 严重偏低已修正）
     drive_efficiency: float = 0.85        # 弹簧储能 → 活塞动能的效率（校准旋钮）
 
@@ -108,6 +112,7 @@ DEVICE_KEY_MAP = {
     "弹簧自由长度mm": "spring_free_length_mm",
     "弹簧装配长度mm": "spring_installed_length_mm",
     "弹簧满压长度mm": "spring_compressed_length_mm",
+    "撞击回弹系数": "piston_head_restitution",
     "传动效率": "drive_efficiency",
     "气缸内径mm": "cylinder_bore_mm",
     "气缸长度mm": "cylinder_length_mm",

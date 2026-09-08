@@ -124,6 +124,11 @@ def render(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn: Dynamics,
     L.append("活塞行程     : %.1f mm（满行程的 %.0f%%）" % (tl.stroke_mm, tl.stroke_ratio * 100))
     L.append("弹簧储能     : %.0f mJ（理想末速度 %.1f m/s，仅供参考；实际由静止加速并受气垫缓冲）"
              % (dyn.energy_mj, dyn.v_release_m_s))
+    L.append("弹簧长度     : 自由 %.0f / 装配 %.0f mm，本配置拉满 %.1f mm（= 装配 − 行程，随切齿变化）"
+             % (dev.spring_free_length_mm, dev.spring_installed_length_mm,
+                dev.spring_installed_length_mm - tl.stroke_mm))
+    L.append("回位稳定     : %.1f ms（撞击 %.1f m/s → 回弹 %.1f m/s；弹簧刚度/预压越大复位越快）"
+             % (bal.t_settle_ms, bal.v_impact_m_s, bal.v_rebound_m_s))
     L.append("压气指数     : %.2f | 缸压峰值 %.0f kPa | 有效排量 %.2f cm³"
              % (dyn.air_index, bal.p_max_kpa, bal.swept_cm3))
     L.append("水弹初速     : %.1f m/s（动能 %.2f J）%s"
@@ -161,7 +166,7 @@ def render(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn: Dynamics,
     L.append("提示：本报告为简化模型的数据模拟；以下器件参数为估算值，"
              "结论精度依赖校准：")
     L.append("      弹簧刚度表、弹簧预压、活塞质量/行程、气缸内径、凸轮槽角度、"
-             "余隙容积。")
+             "余隙容积、撞击回弹系数。")
     L.append("      实测后通过「器件参数覆盖」修正，或用实测初速反标「气动效率」。")
     return "\n".join(L)
 

@@ -13,7 +13,7 @@ from gearbox_sim.params import SimConfig, load_config, ConfigError
 from gearbox_sim.timing import build_timeline
 from gearbox_sim.dynamics import compute
 from gearbox_sim.feeding import evaluate
-from gearbox_sim.ballistics import compute as compute_ballistics
+from gearbox_sim.ballistics import compute as compute_ballistics, settle_time_ms
 from gearbox_sim.diagnosis import (run_checks, enumerate_cut_schemes,
                                    seal_margin_ms, LEVEL_OK, LEVEL_WARN,
                                    LEVEL_DANGER)
@@ -432,6 +432,58 @@ lv = {c.name: c.level for c in checks}
 check("退化行程 p_rise_ms 为 None（哨兵统一）", bal.p_rise_ms is None)
 check("退化行程 气密判定通过（无有效压气）", lv["气密时序"] == LEVEL_OK)
 check("退化行程 气密裕量哨兵 999", seal_margin_ms(tl, bal) == 999.0)
+
+# ---- 13. v0.6.0 回归：满压长度派生 + 天梯复位模型 ----
+d0 = make_cfg().device
+check("默认满压长度 = 装配长 − 满行程（102.5−60.5=42.0）",
+      abs(d0.spring_compressed_length_mm
+          - (d0.spring_installed_length_mm - d0.piston_full_stroke_mm)) < 1e-9,
+      "满压=%.1f mm" % d0.spring_compressed_length_mm)
+cfg = make_cfg(rear_cut=4)
+tl, dyn, feed, bal, checks = full(cfg)
+check("切齿后拉满长度 = 装配长 − 实际行程（随切齿派生）",
+      abs((cfg.device.spring_installed_length_mm - tl.stroke_mm) - 57.125) < 1e-9,
+      "拉满=%.3f mm（行程 %.3f）" % (cfg.device.spring_installed_length_mm - tl.stroke_mm,
+                                     tl.stroke_mm))
+
+cfg = make_cfg()
+tl, dyn, feed, bal, checks = full(cfg)
+k_n = dyn.k_n_per_mm * 1000.0
+expect = settle_time_ms(bal.v_impact_m_s, k_n,
+                        cfg.device.spring_preload_mm / 1000.0,
+                        cfg.device.piston_mass_g / 1000.0,
+                        cfg.device.piston_head_restitution)
+check("回位稳定 = 简谐回位公式 2·atan(v_r/(ω·x0))/ω",
+      abs(bal.t_settle_ms - expect) < 1e-9,
+      "settle=%.2fms（回弹 %.2f m/s）" % (bal.t_settle_ms, bal.v_rebound_m_s))
+
+check("同撞击速度下：刚度越大复位越快",
+      settle_time_ms(5.0, 850.0, 0.0625, 0.02, 0.5)
+      < settle_time_ms(5.0, 450.0, 0.0625, 0.02, 0.5),
+      "k850 %.2f vs k450 %.2f ms"
+      % (settle_time_ms(5.0, 850.0, 0.0625, 0.02, 0.5),
+         settle_time_ms(5.0, 450.0, 0.0625, 0.02, 0.5)))
+check("同条件下：撞击越重复位越久",
+      settle_time_ms(8.0, 620.0, 0.0625, 0.02, 0.5)
+      > settle_time_ms(4.0, 620.0, 0.0625, 0.02, 0.5),
+      "v8 %.2f vs v4 %.2f ms"
+      % (settle_time_ms(8.0, 620.0, 0.0625, 0.02, 0.5),
+         settle_time_ms(4.0, 620.0, 0.0625, 0.02, 0.5)))
+
+c_lo = make_cfg(); c_lo.device.spring_preload_mm = 40.0
+c_hi = make_cfg(); c_hi.device.spring_preload_mm = 80.0
+b_lo = full(c_lo)[3]
+b_hi = full(c_hi)[3]
+check("压缩长度（预压）越大 → 天梯复位越快",
+      b_hi.t_settle_ms < b_lo.t_settle_ms,
+      "预压80 %.2f vs 预压40 %.2f ms" % (b_hi.t_settle_ms, b_lo.t_settle_ms))
+
+c_e = make_cfg(); c_e.device.piston_head_restitution = 0.2
+b_e = full(c_e)[3]
+check("回弹系数可覆盖且影响复位时间",
+      b_e.t_settle_ms < bal.t_settle_ms
+      and abs(b_e.v_rebound_m_s - 0.2 * bal.v_impact_m_s) < 1e-9,
+      "系数0.2 %.2f vs 默认 %.2f ms" % (b_e.t_settle_ms, bal.t_settle_ms))
 
 print()
 if FAILS:
