@@ -6,6 +6,9 @@
     见工程目录「电机性能曲线/」）：
       - 超力无刷 4W8：空载 48000 RPM，堵转 473.7 mN·m（222 A）
       - 超力有刷 3W5：空载 35500 RPM，堵转 414.9 mN·m（146 A）
+  * 电压工况（✅用户更正）：曲线基于标称 3.7V/芯（11.1V = 3S 标称），
+    实际使用均充满至 4.2V/芯（3S 满电 12.6V，较曲线电压高 ~13.5%）——
+    配置电池后按满电电压缩放电机性能，电压跌落自满电起算。
   * 准静态法：以拉簧全程的**平均扭矩**求负载转速（扇齿拉簧段转速
     近似恒定）；以拾取瞬间的**峰值扭矩**判断是否堵转；
     忽略电机转子惯性与加速过程（对 ROF 影响为毫秒级瞬态）。
@@ -18,7 +21,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 BATT_CELL_V = 3.7    # 锂电每芯标称电压 (V)
-CURVE_REF_V = 11.1   # 电机曲线的测试电压 (V)
+FULL_CELL_V = 4.2    # 锂电每芯满电电压 (V)（实际工况，✅用户更正）
+CURVE_REF_V = 11.1   # 电机曲线的测试电压 (V = 3.7V × 3S 标称)
 
 MOTOR_CURVES = {
     "超力无刷4W8": {
@@ -46,10 +50,11 @@ class BatteryInfo:
     cells: int            # 电芯数
     capacity_mah: float   # 容量
     c_rate: float         # 放电倍率
-    v_nom: float          # 标称电压 = 3.7 × 电芯数
+    v_nom: float          # 标称电压 = 3.7 × 电芯数（规格展示）
+    v_start: float        # 满电起始电压 = 4.2 × 电芯数（实际工况，✅用户更正）
     i_max_a: float        # 最大持续电流 = 容量(Ah) × C
-    v_eff: float          # 负载下的有效电压（含压降）
-    sag: float            # 电压保持率 = 有效电压 ÷ 标称电压（1.0=无跌落）
+    v_eff: float          # 负载下的有效电压（自满电电压跌落）
+    sag: float            # 电压保持率 = 有效电压 ÷ 满电电压（1.0=无跌落）
     i_peak_a: float       # 拾取瞬间电机峰值电流需求
     i_pull_a: float       # 拉簧段平均电流需求
     shots: float          # 理论续航（发；按匀速周期+拉簧平均电流估算，偏保守）
@@ -96,14 +101,16 @@ def resolve_loaded_rpm(cfg, dev):
     i_nl = m["no_load_current_a"]
     i_stall_ref = m["stall_current_a"]
 
-    # 电池（可选）：电压 = 3.7 × 电芯数；最大持续电流 = 容量(Ah) × C
-    v_nom = CURVE_REF_V
+    # 电池（可选）：实际工况按满电电压 4.2V × 电芯数（✅用户更正：电机曲线
+    # 基于标称 3.7V/芯，实际使用均充满至 4.2V/芯，如 3S 满电 12.6V）；
+    # 最大持续电流 = 容量(Ah) × C
+    v_start = CURVE_REF_V
     i_batt_max = None
     batt = None
     if cfg.batt_cells is not None:
-        v_nom = BATT_CELL_V * cfg.batt_cells
+        v_start = FULL_CELL_V * cfg.batt_cells
         i_batt_max = cfg.batt_capacity_mah / 1000.0 * cfg.batt_c_rate
-        batt = (v_nom, i_batt_max)
+        batt = (v_start, i_batt_max)
 
     # 电机峰值电流需求（曲线电压下；扭矩对应电流与电压无关）
     frac_peak = min(t_peak / t_stall_ref, 1.0)
@@ -113,7 +120,7 @@ def resolve_loaded_rpm(cfg, dev):
     sag = 1.0
     if i_batt_max is not None and i_peak > i_batt_max and i_peak > 0:
         sag = i_batt_max / i_peak
-    v_eff = v_nom * sag
+    v_eff = v_start * sag
     scale = v_eff / CURVE_REF_V
 
     stall = t_peak >= t_stall_ref * scale
@@ -146,7 +153,8 @@ def resolve_loaded_rpm(cfg, dev):
             if i_pull > 0 else 0.0
         batt_info = BatteryInfo(
             cells=cfg.batt_cells, capacity_mah=cfg.batt_capacity_mah,
-            c_rate=cfg.batt_c_rate, v_nom=v_nom, i_max_a=i_batt_max,
+            c_rate=cfg.batt_c_rate, v_nom=BATT_CELL_V * cfg.batt_cells,
+            v_start=v_start, i_max_a=i_batt_max,
             v_eff=v_eff, sag=sag, i_peak_a=i_peak, i_pull_a=i_pull,
             shots=shots,
         )

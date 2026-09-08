@@ -68,7 +68,8 @@ def run_checks(cfg: SimConfig, dev: DeviceParams, tl, dyn, feed, bal) -> List[Ch
     # 0.5 电池放电（配置了电池时：电压跌落 + 续航）
     if tl.batt_sag is None:
         checks.append(Check("电池放电", LEVEL_OK,
-                            "未配置电池（按理想电源计算，不计电压跌落）"))
+                            "未配置电池（按曲线测试电压 11.1V = 3.7V×3S 标称理想电源计算，"
+                            "不计电压跌落；实际满电 3S ≈ 12.6V）"))
     else:
         sag_pct = (1.0 - tl.batt_sag) * 100
         if sag_pct > 25:

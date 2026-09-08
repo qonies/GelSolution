@@ -297,7 +297,7 @@ tl, dyn, feed, bal, checks = full(cfg)
 lv = {c.name: c.level for c in checks}
 check("4S 2200 40C → 供电充足无跌落", abs(tl.batt_sag - 1.0) < 1e-9
       and lv["电池放电"] == LEVEL_OK, "sag=%.3f" % tl.batt_sag)
-check("4S 提升负载转速（14.8V > 11.1V）", tl.loaded_rpm > 48000.0,
+check("4S 满电 16.8V 提升负载转速（> 曲线 11.1V）", tl.loaded_rpm > 48000.0,
       "n=%.0f" % tl.loaded_rpm)
 check("续航估算合理", 1000.0 < tl.batt_shots < 50000.0,
       "shots=%.0f" % tl.batt_shots)
@@ -521,6 +521,27 @@ check("回弹系数可覆盖且影响复位时间",
       b_e.t_settle_ms < bal.t_settle_ms
       and abs(b_e.v_rebound_m_s - 0.2 * bal.v_impact_m_s) < 1e-9,
       "系数0.2 %.2f vs 默认 %.2f ms" % (b_e.t_settle_ms, bal.t_settle_ms))
+
+# ---- 14. v0.6.2 回归：电池满电 4.2V/芯（实际工况）----
+n_nobatt, _, _ = gmotor.resolve_loaded_rpm(make_cfg(motor_model="超力无刷4W8"),
+                                           make_cfg().device)
+cfg = make_cfg(motor_model="超力无刷4W8", batt_cells=3,
+               batt_capacity_mah=2200.0, batt_c_rate=40.0)
+_, _, b_3s = gmotor.resolve_loaded_rpm(cfg, cfg.device)
+check("3S 满电起始电压 = 4.2×3 = 12.6V（标称仍记 11.1V）",
+      abs(b_3s.v_start - 12.6) < 1e-9 and abs(b_3s.v_nom - 11.1) < 1e-9,
+      "满电 %.1fV / 标称 %.1fV" % (b_3s.v_start, b_3s.v_nom))
+check("无跌落时 v_eff = 满电电压，负载转速高于曲线电压工况",
+      abs(b_3s.v_eff - 12.6) < 1e-9, "v_eff=%.2fV" % b_3s.v_eff)
+n_3s, _, _ = gmotor.resolve_loaded_rpm(cfg, cfg.device)
+check("3S 满电负载转速 > 曲线电压负载转速（12.6 > 11.1V）",
+      n_3s > n_nobatt, "%.0f vs %.0f RPM" % (n_3s, n_nobatt))
+cfg = make_cfg(motor_model="超力无刷4W8", batt_cells=3,
+               batt_capacity_mah=1100.0, batt_c_rate=30.0)
+_, _, b_sag = gmotor.resolve_loaded_rpm(cfg, cfg.device)
+check("电压跌落自满电起算：v_eff = 12.6 × sag",
+      abs(b_sag.v_eff - 12.6 * b_sag.sag) < 1e-9,
+      "sag=%.3f v_eff=%.2fV" % (b_sag.sag, b_sag.v_eff))
 
 print()
 if FAILS:

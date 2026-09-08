@@ -66,18 +66,21 @@ def build_timeline(cfg: SimConfig, dev: DeviceParams) -> Timeline:
             motor_desc = "%s 曲线负载 %.0f RPM（峰值扭矩为堵转的 %.0f%%）" \
                 % (minfo.model, rpm, minfo.torque_peak_mnm / minfo.stall_torque_mnm * 100)
         if batt is None:
-            batt_desc = "未配置电池（按曲线电压 %.1fV 理想电源计算）" % _motor.CURVE_REF_V
+            batt_desc = ("未配置电池（按曲线测试电压 %.1fV = 3.7V×3S 标称理想电源计算；"
+                         "实际满电 3S ≈ 12.6V，可配置「电池」获取满电工况）"
+                         % _motor.CURVE_REF_V)
             batt_sag = None
             batt_shots = None
         else:
             sag_pct = (1.0 - batt.sag) * 100
             if sag_pct > 0.1:
-                batt_desc = "%dS %.0fmAh %.0fC（最高 %.0fA）→ 负载电压 %.1fV（跌落 %.0f%%）" \
-                    % (batt.cells, batt.capacity_mah, batt.c_rate, batt.i_max_a,
-                       batt.v_eff, sag_pct)
+                batt_desc = ("%dS %.0fmAh %.0fC（最高 %.0fA，满电 %.1fV）→ 负载 %.1fV（跌落 %.0f%%）"
+                             % (batt.cells, batt.capacity_mah, batt.c_rate, batt.i_max_a,
+                                batt.v_start, batt.v_eff, sag_pct))
             else:
-                batt_desc = "%dS %.0fmAh %.0fC（最高 %.0fA）→ 供电充足，无明显压降" \
-                    % (batt.cells, batt.capacity_mah, batt.c_rate, batt.i_max_a)
+                batt_desc = ("%dS %.0fmAh %.0fC（最高 %.0fA，满电 %.1fV）→ 供电充足，无明显压降"
+                             % (batt.cells, batt.capacity_mah, batt.c_rate, batt.i_max_a,
+                                batt.v_start))
             batt_sag = batt.sag
             batt_shots = batt.shots
     pitch = dev.sector_pitch_deg

@@ -8,7 +8,8 @@ SimConfig (params.py, JSON解析+中文校验)
    ├─ motor.py     resolve_loaded_rpm(cfg, dev) → (负载RPM, MotorInfo?, BatteryInfo?)
    │     准静态法：N(T)=N0×(1−T/T堵转)；弹簧力经扇齿分度圆半径/齿比反射；
    │     平均扭矩→负载转速、峰值扭矩（拾取瞬间）→堵转判定；
-   │     电池：容量×C=限流，峰值需求超限→电压按保持率跌落并缩放输出；
+   │     电池：满电 4.2V/芯（实际工况✅，曲线为标称 3.7V/芯/11.1V）×S 起算，
+   │     容量×C=限流，峰值需求超限→电压按保持率自满电跌落并缩放输出；
    │     未选型号 = 固定转速模式（标称×负载系数，默认 0.8）
    │
    ├─ timing.py    build_timeline(cfg, dev) → Timeline
