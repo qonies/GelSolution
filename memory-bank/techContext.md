@@ -15,7 +15,7 @@
 ## 运行
 - `python run.py [-c configs/xxx.json]`（命令行报告）
 - `python webui.py [--port 8765] [--no-browser]`（本地网页界面，实时调参）
-- `python tests/test_sim.py`（引擎 118 项）/ `python tests/test_webapp.py`（接口 14 项）
+- `python tests/test_sim.py`（引擎 123 项）/ `python tests/test_webapp.py`（接口 14 项）
 
 ## 网页界面（webapp.py + web/index.html）
 - 后端：仅标准库 http.server（ThreadingHTTPServer）

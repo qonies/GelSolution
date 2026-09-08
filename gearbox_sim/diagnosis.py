@@ -156,7 +156,7 @@ def run_checks(cfg: SimConfig, dev: DeviceParams, tl, dyn, feed, bal) -> List[Ch
     # 5. 压气匹配
     if dyn.air_index < th.low_air_index:
         checks.append(Check("压气匹配", LEVEL_WARN,
-                            "压气指数 %.2f < %.2f（行程比 %.0f%% × 气缸系数 %.2f）→ 压气不足，初速下降"
+                            "压气指数 %.2f < %.2f（水桶效应：min(行程比 %.0f%%, 气缸系数 %.2f)）→ 压气不足，初速下降"
                             % (dyn.air_index, th.low_air_index,
                                tl.stroke_ratio * 100, dev.cylinder_factor[cfg.cylinder])))
     else:

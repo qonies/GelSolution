@@ -4,7 +4,8 @@
   * 弹簧储能 E = 0.5·k·((x0+s)^2 − x0^2)（k N/mm、x mm → mJ）；
   * 释放速度 v_release = √(2·E·传动效率/m_piston)——活塞被气垫减速前的初速度；
   * 气垫减速、活塞撞击时刻/速度、水弹加速见 ballistics.py（联动积分模型）；
-  * 压气指数 = 行程比 × 气缸系数（相对指标，用于压气不足判定）。
+  * 压气指数 = min(行程比, 气缸系数)（水桶效应：有效密封段/满行程，
+    相对指标，用于压气不足判定）。
 """
 import math
 from dataclasses import dataclass
@@ -37,7 +38,8 @@ def compute(cfg: SimConfig, dev: DeviceParams, tl: Timeline) -> Dynamics:
     else:  # 行程被切光：活塞不动
         v_release = 0.0
 
-    air_index = tl.stroke_ratio * dev.cylinder_factor[cfg.cylinder]
+    # 水桶效应：压气指数 = 有效密封段/满行程 = min(气缸系数, 行程比)
+    air_index = min(dev.cylinder_factor[cfg.cylinder], tl.stroke_ratio)
 
     return Dynamics(
         k_n_per_mm=k, energy_mj=energy_mj, v_release_m_s=v_release,

@@ -3,8 +3,11 @@
 
 物理过程（与真实二号波一致）：
   1. 活塞释放后先在开孔段自由加速（开孔段气体直通大气，不压缩）；
+     孔位固定于缸体、以满行程标定（50% 缸 = 满行程走完一半后密封）；
   2. 活塞头盖过气孔后气体密封，随活塞前进被绝热压缩，同时气垫
-     反过来减速活塞（缓冲）；
+     反过来减速活塞（缓冲）；密封段长度按水桶效应取
+     min(气缸系数×满行程, 实际行程)——行程仍覆盖开孔段时密封容积
+     不随切齿缩减，行程短于开孔段时全程密封（无自由泄压段）；
   3. 弹后气压一升高水弹就开始沿内管加速——弹后容积增大又反过来
      限制压力上升（大内径缸下该效应显著，不能按"先压满再膨胀"算）；
   4. 活塞到达缸头（撞击）后容积只随水弹前进增大，气压绝热下降，
@@ -34,7 +37,7 @@ class Ballistics:
     v_m_s: float             # 估算初速
     energy_j: float          # 水弹出口动能 (J)
     p_max_kpa: float         # 密封后缸压峰值
-    swept_cm3: float         # 有效排量 = 缸面积 × 行程 × 气缸系数
+    swept_cm3: float         # 有效排量 = 缸面积 × 密封段长度（水桶：min(系数×满行程, 行程)）
     useful_stroke_mm: float  # 有效推力行程（气压降至大气压时水弹已行进距离）
     leak_ratio: float        # 泄气能量损失比例
     gap_mm: float            # 管径-弹径单边间隙
@@ -77,6 +80,7 @@ def compute(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn) -> Ballistics:
     ball = float(cfg.ball_diameter)
     length = cfg.barrel_length_mm / 1000.0
     s = tl.stroke_mm / 1000.0
+    s_full = dev.piston_full_stroke_mm / 1000.0                 # 满行程（孔位以其标定）
     f = dev.cylinder_factor[cfg.cylinder]
     m_p = dev.piston_mass_g / 1000.0
     m_b = dev.gel_mass_for(ball) / 1000.0   # 水弹质量按直径体积缩放
@@ -92,7 +96,10 @@ def compute(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn) -> Ballistics:
     if s < 1e-6:
         return _degenerate(tl)
 
-    V_seal = V_dead + A_cyl * f * s        # 密封瞬间弹后容积（绝热基准）
+    # 水桶效应（✅用户更正）：孔位固定于缸体（以满行程标定），
+    # 有效密封段 = min(气缸系数×满行程, 实际行程)——不是 f×s 的叠加缩减
+    seal_dist = min(f * s_full, s)
+    V_seal = V_dead + A_cyl * seal_dist    # 密封瞬间弹后容积（绝热基准）
     x_p = 0.0
     x_b = 0.0
     v_b = 0.0
@@ -108,8 +115,8 @@ def compute(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn) -> Ballistics:
     while t < _T_CAP and not (ball_done and strike_t is not None):
         d = max(s - x_p, 0.0)
         P = p_atm
-        # 密封段：活塞头已盖过气孔 → 绝热压缩
-        if x_p >= (1.0 - f) * s - 1e-12 and V_seal > 0:
+        # 密封段：剩余行程已进入密封段（活塞头盖过气孔）→ 绝热压缩
+        if d <= seal_dist + 1e-12 and V_seal > 0:
             V = V_dead + A_cyl * d + A_push * x_b
             if V > 1e-12:
                 P = min(p_atm * (V_seal / V) ** gamma, _P_CAP)
@@ -172,7 +179,7 @@ def compute(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn) -> Ballistics:
 
     return Ballistics(
         v_m_s=v_m_s, energy_j=energy_j, p_max_kpa=p_max,
-        swept_cm3=A_cyl * s * f * 1e6,  # m³ → cm³
+        swept_cm3=A_cyl * seal_dist * 1e6,  # 有效排量（水桶效应） m³ → cm³
         useful_stroke_mm=useful * 1000.0,
         leak_ratio=leak, gap_mm=gap,
         strike_ms=strike_abs, v_impact_m_s=v_imp, v_rebound_m_s=v_reb,

@@ -2,6 +2,7 @@
 """模拟引擎测试：直接 python tests/test_sim.py 运行（无需 pytest）。"""
 import io
 import json
+import math
 import os
 import sys
 
@@ -90,26 +91,62 @@ check("高射速触发打齿判定", bal.return_margin_ms < 2.0,
 lv = {c.name: c.level for c in checks}
 check("打齿判定为警告或危险", lv["打齿风险"] in (LEVEL_WARN, LEVEL_DANGER))
 
-# ---- 5. 重后切气密：100% 缸无开孔缓冲 → 压力立即建立 → 危险；70% 缸开孔缓冲 → 放宽 ----
+# ---- 5. 重后切气密（水桶效应：孔位固定于缸体）----
+# 100% 缸无开孔 → 全程密封 → 压力立即建立 → 危险；
+# 70% 缸孔位偏后（距前端 42.35mm），后切4 后活塞仅越孔 3mm → 缓冲极小 → 危险；
+# 50% 缸孔位在中点（30.25mm），后切4 后仍有 ~15mm 自由泄压段 → 放宽
 cfg = make_cfg(rear_cut=4, cylinder="100%")
 tl, dyn, feed, bal, checks = full(cfg)
 sm = bal.p_rise_ms - tl.seat_ms
 check("后切4+100%缸 气密裕量为负", sm < 0, "seat_margin=%.2fms" % sm)
 lv = {c.name: c.level for c in checks}
 check("气密判定为危险", lv["气密时序"] == LEVEL_DANGER)
-cfg = make_cfg(rear_cut=4)
+cfg = make_cfg(rear_cut=4, cylinder="70%")
 tl, dyn, feed, bal, checks = full(cfg)
 lv = {c.name: c.level for c in checks}
-check("后切4+70%缸 开孔缓冲放宽气密判定", lv["气密时序"] in (LEVEL_WARN, LEVEL_OK),
-      "level=%s" % lv["气密时序"])
+check("后切4+70%缸 孔位偏后越孔仅3mm → 缓冲极小，气密危险",
+      lv["气密时序"] == LEVEL_DANGER, "level=%s" % lv["气密时序"])
+cfg = make_cfg(rear_cut=4, cylinder="50%")
+tl, dyn, feed, bal, checks = full(cfg)
+lv = {c.name: c.level for c in checks}
+check("后切4+50%缸 开孔缓冲大 → 气密判定放宽",
+      lv["气密时序"] in (LEVEL_WARN, LEVEL_OK),
+      "level=%s margin=%.2f" % (lv["气密时序"], bal.p_rise_ms - tl.seat_ms))
 
-# ---- 6. 重切齿 → 压气不足 + 剩余齿数警告 ----
-cfg = make_cfg(front_cut=3, rear_cut=3)
+# ---- 6. 压气匹配（水桶效应：min(气缸系数, 行程比)，切齿不叠加缩减）----
+cfg = make_cfg(cylinder="50%", front_cut=1, rear_cut=1)
 tl, dyn, feed, bal, checks = full(cfg)
 lv = {c.name: c.level for c in checks}
-check("前后各切3 → 压气不足警告", lv["压气匹配"] == LEVEL_WARN,
-      "air_index=%.2f" % dyn.air_index)
+check("50%缸 轻切齿 → 压气不足警告（水桶上限 0.5 < 0.6）",
+      lv["压气匹配"] == LEVEL_WARN, "air_index=%.2f" % dyn.air_index)
+check("50%缸 压气指数 = min(0.5, 行程比)",
+      abs(dyn.air_index - min(0.5, tl.stroke_ratio)) < 1e-9)
+
+cfg = make_cfg(front_cut=3, rear_cut=3)   # 70% 缸：行程比 0.625 < 0.7 → 全程密封
+tl, dyn, feed, bal, checks = full(cfg)
+lv = {c.name: c.level for c in checks}
+check("70%缸 前后各切3 → 压气匹配通过（切齿不叠加缩减有效容积）",
+      lv["压气匹配"] == LEVEL_OK
+      and abs(dyn.air_index - min(0.7, tl.stroke_ratio)) < 1e-9,
+      "air_index=%.3f" % dyn.air_index)
 check("剩余10齿 → 啮合齿数通过", lv["啮合齿数"] == LEVEL_OK)
+
+# 水桶效应弹道验证：行程仍覆盖开孔段 → 有效密封排量与无切相同
+b_full50 = full(make_cfg(cylinder="50%"))[3]
+b_cut50 = full(make_cfg(cylinder="50%", rear_cut=2))[3]
+check("50%缸 后切2（行程仍覆盖开孔段）→ 有效密封排量不变",
+      abs(b_cut50.swept_cm3 - b_full50.swept_cm3) < 1e-9,
+      "无切 %.2f vs 后切2 %.2f cm³" % (b_full50.swept_cm3, b_cut50.swept_cm3))
+# 行程短于开孔段 → 全程密封（无自由段），有效排量 = 全行程排量
+cfg = make_cfg(cylinder="50%", front_cut=6, rear_cut=6)
+tl, dyn, feed, bal, checks = full(cfg)
+a_m2 = math.pi * (cfg.device.cylinder_bore_mm / 2000.0) ** 2
+exp_swept = (a_m2 * min(cfg.device.cylinder_factor["50%"]
+                        * cfg.device.piston_full_stroke_mm / 1000.0,
+                        tl.stroke_mm / 1000.0) * 1e6)
+check("50%缸 切至行程短于开孔段 → 全程密封（有效排量 = 全行程排量）",
+      abs(bal.swept_cm3 - exp_swept) < 1e-9,
+      "swept=%.2f cm³（预期 %.2f）" % (bal.swept_cm3, exp_swept))
 
 # ---- 7. 切光 → 危险 ----
 cfg = make_cfg(front_cut=6, rear_cut=6)
