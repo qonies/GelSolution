@@ -108,7 +108,7 @@ def render(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn: Dynamics,
     L.append("气缸类型     : %s（气量系数 %.2f，开孔段保留 %.2f）"
              % (cfg.cylinder, dev.cylinder_factor[cfg.cylinder],
                 dev.port_retention))
-    L.append("气缸规格     : 内径 %.1f mm × 长度 %.0f mm（活塞行程 %.1f mm，LDX 1.0 基准）"
+    L.append("气缸规格     : 内径 %.1f mm × 长度 %g mm（活塞行程 %.1f mm，LDX 1.0 基准）"
              % (dev.cylinder_bore_mm, dev.cylinder_length_mm, dev.piston_full_stroke_mm))
     L.append("弹簧硬度     : %s（刚度 %.2f N/mm）" % (cfg.spring, dyn.k_n_per_mm))
     L.append("内管/水弹    : 内管 %.0f mm，管径 %s，水弹 %s（单边间隙 %.2f mm，泄气损失 %.0f%%）"
