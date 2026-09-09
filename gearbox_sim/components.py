@@ -14,6 +14,11 @@
   时序与回位裕量的机理。
 """
 from dataclasses import dataclass, field
+import math
+
+# 原装天梯咬合齿数基准：13.5 齿（半齿磨低仍计整齿）→ 计 14 齿，对应
+# 活塞满行程 60.5mm 的实测值；拉程按「剩余咬合齿数 / 14」缩放并封顶满行程
+TAPPET_STOCK_BITE = 14
 
 
 @dataclass
@@ -23,6 +28,14 @@ class DeviceParams:
     # ---- 扇齿与切齿 ----
     sector_full_teeth: int = 16        # 扇齿满啮合齿数（未切齿）
     sector_pitch_deg: float = 11.25    # 每齿对应的扇齿转角（满弧 180°，16×11.25）
+    tappet_teeth: float = 13.5         # 天梯（活塞齿条）齿数（✅v0.6.9 默认=原装 13.5；
+                                       # 市售 11.5 齿等半齿规格可）：半齿=第二齿磨低防
+                                       # 咬合，仍按整齿咬合 → 计整齿（13.5→14、11.5→12）；
+                                       # 蛋糕齿实际咬合齿数 = min(扇齿满啮合齿数, 计整齿数)。
+                                       # 原装咬合 14 齿对应活塞满行程实测 60.5mm → 实际
+                                       # 拉程 = 满行程 × min(剩余咬合, 14) / 14（超过按
+                                       # 满行程封顶）——齿数越少拉程越短，储能/初速下降、
+                                       # 电机负载减轻，撞击/回位稳定经联动积分随之变化
 
     # ---- 凸轮槽 / 拉桥旗（推嘴时序，齿轮角）----
     # 几何锚定（✅ 用户确认）：拉桥柱位于第 2 颗齿下方——当扇齿第 2 颗齿接触
@@ -39,22 +52,30 @@ class DeviceParams:
     #           可能有误，应以齿轮实际拉过天梯的行程派生）；
     #           M85~M90 刚度 ≈0.55~0.65 N/mm，M100~M110 ≈0.70~0.85 N/mm
     piston_full_stroke_mm: float = 60.5  # 【实测】活塞最大压缩行程 ≈60.5mm
-    spring_free_length_mm: float = 165.0    # 【实测区间中值】弹簧自由长度
-    spring_installed_length_mm: float = 102.5  # 【实测区间中值】安装后长度（预压 = 自由 − 装配 ≈ 62.5mm）
-    spring_compressed_length_mm: float = 42.0  # 【推算】满行程时满压长度 = 装配长 − 满行程（102.5 − 60.5）；
-                                               # 实际拉满长度随切齿行程派生 = 装配长 − 实际行程
+    spring_free_length_mm: float = 165.0    # 【实测区间中值·展示项】弹簧自由长度（参与预压派生）
+    spring_installed_length_mm: float = 102.5  # 【实测区间中值·展示项】安装后长度（参与预压派生）
+    spring_compressed_length_mm: float = 42.0  # 【推算·仅展示】满行程时满压长度 = 装配长 − 满行程（102.5 − 60.5）；
+                                               # 不参与计算：实际拉满长度随切齿行程派生 = 装配长 − 实际行程（report.py）
     piston_mass_g: float = 20.0           # 【估算】活塞组件质量（借用AEG值，建议电子秤实测）
     piston_head_restitution: float = 0.5  # 【估算】撞击回弹系数：天梯撞缸头后的反弹速度比
                                           # （回位稳定模型 v_r = 系数 × 撞击速度；回弹越猛复位越久）
-    spring_preload_mm: float = 62.5       # 【推算】弹簧预压量 = 自由长 − 装配长（原 5mm 严重偏低已修正）
+    spring_preload_mm: float = 62.5       # 【推算】弹簧预压量 = 自由长 − 装配长（原 5mm 严重偏低已修正）；
+                                          # JSON 未显式覆盖时由解析层按当前 自由/装配 长度自动派生（v0.6.7）
     drive_efficiency: float = 0.85        # 弹簧储能 → 活塞动能的效率（校准旋钮）
 
     # ---- 弹道（气缸/内管/水弹，LDX 1.0 二号波实测基准）----
     cylinder_bore_mm: float = 23.8        # 【实测】气缸内径 23.8mm（大缸）
     cylinder_length_mm: float = 72.5      # 【实测】气缸长度 72.5mm
+    port_retention: float = 0.6           # 【估算】开孔段气压保留系数：50%~100% 缸 =
+                                          # 在气缸相应位置对称开 4 条横槽漏气；但活塞
+                                          # 经过极快，横槽来不及漏掉全部已压缩气体
+                                          # （有漏但非全漏）→ 开孔段按等效多变压缩
+                                          # γ×保留系数建模：0=全漏（直通大气，旧模型）、
+                                          # 1=完全不漏；建议配合「气动效率」用实测初速反标
     dead_volume_cm3: float = 1.0          # 【估算】余隙容积（缸头+hop+管尾死容积）
     gel_mass_g: float = 0.20              # 【实测】水弹质量（泡发后 ≈0.2g，以 7.2mm 弹为基准，其他直径按体积缩放）
-    aero_efficiency: float = 0.21         # 气动效率（按实测弹簧 + 0.2g 弹 + M90/70缸 ≈71m/s 校准）
+    aero_efficiency: float = 0.243        # 气动效率（✅v0.7.0 随开孔段保留模型重校准：
+                                          # 按实测弹簧 + 0.2g 弹 + M90/70缸 ≈71m/s 锚点）
     adiabatic_index: float = 1.4          # 空气绝热指数
     leak_coeff: float = 1.5               # 管径-弹径间隙泄气损失系数
     atm_kpa: float = 101.3                # 大气压 kPa
@@ -79,8 +100,8 @@ class DeviceParams:
     # ---- 供蛋方式 → 最高供弹速率 (发/秒)；最小供蛋间隔 = 1000 ÷ 速率 ----
     feed_max_rps: dict = field(default_factory=lambda: {
         "普通波轮": 30.0,   # 普通波轮：最高每秒 30 发
-        "高级波轮": 50.0,   # 高级波轮：最高每秒 50 发
-        "压力弹匣": 60.0,   # 压力弹匣：最高每秒 60 发
+        "高级波轮": 60.0,   # 高级波轮：最高每秒 60 发（✅用户更正 v0.6.5，原 50）
+        "压力弹匣": 80.0,   # 压力弹匣：最高每秒 80 发（✅用户更正 v0.6.5，原 60）
     })
 
     # ---- 改装件时序量（勾选对应改装项后生效）----
@@ -96,6 +117,11 @@ class DeviceParams:
     delay_device_holes: float = 1.0       # 【✅用户确认】延时器额外占用的孔数（默认 1 孔 = 36°）
     flag_cut_advance_ms: float = 3.0      # 【估算】切拉桥旗使推嘴回位完成提前的时间
 
+    def tappet_bite(self) -> int:
+        """天梯有效咬合齿数：半齿（磨低齿）仍计整齿 → 向上取整，
+        且不超过扇齿满啮合齿数（13.5 → 14，11.5 → 12）。"""
+        return min(self.sector_full_teeth, math.ceil(self.tappet_teeth))
+
     def gel_mass_for(self, ball_diameter_mm: float) -> float:
         """按直径体积缩放水弹质量（gel_mass_g 为 7.2mm 弹基准）。"""
         return self.gel_mass_g * (ball_diameter_mm / 7.2) ** 3
@@ -105,6 +131,7 @@ class DeviceParams:
 DEVICE_KEY_MAP = {
     "扇齿满啮合齿数": "sector_full_teeth",
     "每齿扇齿角": "sector_pitch_deg",
+    "天梯齿数": "tappet_teeth",
     "推嘴缩回起点角": "cam_retract_start_deg",
     "推嘴完全缩回角": "cam_retract_end_deg",
     "推嘴回位起始角": "cam_return_start_deg",
@@ -119,6 +146,7 @@ DEVICE_KEY_MAP = {
     "传动效率": "drive_efficiency",
     "气缸内径mm": "cylinder_bore_mm",
     "气缸长度mm": "cylinder_length_mm",
+    "开孔段保留系数": "port_retention",
     "气缸余隙容积cm3": "dead_volume_cm3",
     "水弹质量g": "gel_mass_g",
     "气动效率": "aero_efficiency",

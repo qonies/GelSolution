@@ -34,10 +34,10 @@ SimConfig (params.py, JSON解析+中文校验)
    │     t=2·atan(v_r/(ω·x0))/ω——刚度/预压影响复位速度）；
    │     输出初速/撞击时刻与速度/回位裕量/p_rise_ms（气密判定基准）
    │
-   ├─ feeding.py   evaluate(cfg, tl) → FeedResult（窗口 vs 最小供蛋间隔）
+   ├─ feeding.py   evaluate(cfg, tl) → FeedResult（能力上限 + 供蛋窗口时序信息）
    │
-   ├─ diagnosis.py run_checks（11 项判定：电机负载/电池放电/打齿/气密时序/
-   │               供蛋窗口/供蛋速率/啮合齿数/压气匹配/初速/气量管长匹配/
+   ├─ diagnosis.py run_checks（10 项判定：电机负载/电池放电/打齿/气密时序/
+   │               供蛋速率/啮合齿数/压气匹配/初速/气量管长匹配/
    │               出膛时序）+ enumerate_cut_schemes（16 方案枚举）
    │               + build_conclusion（推荐切齿/延时器/切拉桥旗/初速）
    │

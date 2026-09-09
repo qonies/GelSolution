@@ -16,6 +16,7 @@ FEED_ALIAS = {"波轮": "普通波轮", "压力": "压力弹匣"}
 VALID_BORES = ["7.3", "7.5"]      # 内管管径 (mm)
 VALID_BALLS = ["7.2", "7.3"]      # 水弹直径 (mm)
 MAX_CUT = 6  # 单侧最大切齿数（防止无意义输入）
+RPM_MAX = 100000.0  # 电机标称转速上限（与网页输入框一致，防误输入）
 
 
 class ConfigError(Exception):
@@ -27,7 +28,7 @@ class SimConfig:
     """一次模拟的全部输入。"""
 
     motor_rpm: float                      # 电机标称转速（标签值）
-    load_factor: float = 1.0              # 负载系数（1.0=按标称转速；用于后期接入电机曲线）
+    load_factor: float = 1.0              # 负载系数（固定转速模式默认 0.8 可覆盖；曲线模式固定 1，不参与计算）
     motor_model: Optional[str] = None     # 电机型号（选型后按性能曲线计算负载转速）
     batt_cells: Optional[int] = None      # 电池电芯数（2S=2, 3S=3, 4S=4；曲线模式生效）
     batt_capacity_mah: Optional[float] = None  # 电池容量 mAh
@@ -43,20 +44,12 @@ class SimConfig:
     barrel_bore: str = "7.5"              # 内管管径（与 default.json / 网页默认统一）
     ball_diameter: str = "7.2"            # 水弹直径
     feed_mode: str = "普通波轮"           # 供蛋方式：普通波轮 / 高级波轮 / 压力弹匣
-    feed_min_ms: Optional[float] = None   # 最小供蛋时间（None=按器件表默认）
     device: DeviceParams = field(default_factory=DeviceParams)
     threshold: Thresholds = field(default_factory=Thresholds)
 
     @property
     def ratio_value(self) -> float:
         return VALID_RATIOS[self.ratio]
-
-    @property
-    def min_feed_ms(self) -> float:
-        """最小供蛋间隔 = 1000 ÷ 该供蛋方式的最高供弹速率。"""
-        if self.feed_min_ms is not None:
-            return self.feed_min_ms
-        return 1000.0 / self.feed_max_rps
 
     @property
     def feed_max_rps(self) -> float:
@@ -81,28 +74,47 @@ def load_config(data: dict) -> SimConfig:
         raise ConfigError("电机.型号 仅支持 %s，实际为: %r"
                           % ("/".join(MOTOR_MODELS), motor_model))
 
-    # 标称转速：固定转速模式（未选型号）必填且 > 0；曲线模式下不参与计算，
-    # 可省略或填 0（缺省按所选电机曲线的空载转速填入，仅作记录展示）
+    # 标称转速：固定转速模式（未选型号）必填且 > 0；曲线模式（选型号）下
+    # 固定为所选电机曲线的空载转速（✅用户确认：选型后不可修改）——
+    # 可省略或填 0（自动按曲线值填入），显式填写须与曲线值一致
     rpm_raw = motor.get("标称转速RPM", None)
+    curve_rpm = MOTOR_CURVES[motor_model]["no_load_rpm"] if motor_model else None
     if rpm_raw is None:
         if motor_model:
-            rpm = MOTOR_CURVES[motor_model]["no_load_rpm"]
+            rpm = curve_rpm
         else:
             raise ConfigError("未选 电机.型号 时必须提供 电机.标称转速RPM（固定转速模式，> 0）")
     else:
         rpm = _require_number(rpm_raw, "电机.标称转速RPM")
         if rpm <= 0:
             if motor_model:
-                rpm = MOTOR_CURVES[motor_model]["no_load_rpm"]
+                rpm = curve_rpm
             else:
                 raise ConfigError("电机.标称转速RPM 必须大于 0")
+        elif motor_model and rpm != curve_rpm:
+            raise ConfigError(
+                "曲线模式（已选 电机.型号）下 电机.标称转速RPM 固定为该电机曲线"
+                "空载转速 %g RPM，不可修改；如需自定义转速请不选 电机.型号"
+                "（固定转速模式）" % curve_rpm)
 
-    # 负载系数默认按电机类型：无刷 0.9 / 有刷 0.8 / 未选型号（固定转速）0.8
-    default_lf = 0.9 if (motor_model
-                         and MOTOR_CURVES[motor_model]["type"] == "无刷") else 0.8
-    load_factor = _require_number(motor.get("负载系数", default_lf), "电机.负载系数")
-    if load_factor <= 0:
-        raise ConfigError("电机.负载系数 必须大于 0")
+    if rpm > RPM_MAX:
+        raise ConfigError("电机.标称转速RPM 需在 1~%d 之间，实际为: %r"
+                          % (int(RPM_MAX), rpm))
+
+    # 负载系数：曲线模式（选型号）固定为 1（✅用户确认：选型后不可修改）；
+    # 固定转速模式（未选型号）默认 0.8，可显式覆盖
+    lf_raw = motor.get("负载系数", None)
+    if motor_model:
+        if lf_raw is not None:
+            raise ConfigError(
+                "曲线模式（已选 电机.型号）下 电机.负载系数 固定为 1，不可修改；"
+                "如需按负载系数降速请不选 电机.型号（固定转速模式）")
+        load_factor = 1.0
+    else:
+        load_factor = _require_number(0.8 if lf_raw is None else lf_raw,
+                                      "电机.负载系数")
+        if load_factor <= 0:
+            raise ConfigError("电机.负载系数 必须大于 0")
 
     # 电池（可选；须在电机曲线模式下使用；缺省项按 3S / 1400mAh / 30C 补齐）
     batt = data.get("电池") or {}
@@ -175,11 +187,8 @@ def load_config(data: dict) -> SimConfig:
     if feed_mode not in VALID_FEED_MODES:
         raise ConfigError("供蛋.方式 仅支持 %s，实际为: %r"
                           % ("/".join(VALID_FEED_MODES), feed_mode))
-    feed_min = feed.get("最小供蛋时间ms", None)
-    if feed_min is not None:
-        feed_min = _require_number(feed_min, "供蛋.最小供蛋时间ms")
-        if feed_min <= 0:
-            raise ConfigError("供蛋.最小供蛋时间ms 必须大于 0")
+    # 注：旧配置中的 供蛋.最小供蛋时间ms 已弃用（✅v3.4 供蛋能力上限=实际支持
+    # 发射的能力，不再换算每发平均供蛋时间），此键被接受但忽略，不再读取。
 
     cfg = SimConfig(
         motor_rpm=rpm, load_factor=load_factor, ratio=ratio,
@@ -190,7 +199,7 @@ def load_config(data: dict) -> SimConfig:
         cylinder=cylinder, spring=spring,
         barrel_length_mm=barrel_length, barrel_bore=str(barrel_bore),
         ball_diameter=str(ball_diameter),
-        feed_mode=feed_mode, feed_min_ms=feed_min,
+        feed_mode=feed_mode,
     )
 
     errors = []
@@ -198,5 +207,32 @@ def load_config(data: dict) -> SimConfig:
     apply_overrides(cfg.threshold, data.get("判定阈值覆盖"), THRESHOLD_KEY_MAP, errors)
     if errors:
         raise ConfigError("；".join(errors))
+
+    # 天梯齿数（v0.6.8）：必须是 4~24 的数字（允许半齿，如 11.5 / 13.5，
+    # 半齿计整齿：13.5 → 14、11.5 → 12）
+    tappet = cfg.device.tappet_teeth
+    if isinstance(tappet, bool) or not isinstance(tappet, (int, float)) \
+            or not 4.0 <= tappet <= 24.0:
+        raise ConfigError("天梯齿数 必须是 4~24 的数字（允许半齿，如 11.5 / 13.5），"
+                          "实际为: %r" % tappet)
+
+    # 开孔段保留系数（v0.7.0）：0~1 的数字（0=开孔段全漏，1=完全不漏）
+    port_ret = cfg.device.port_retention
+    if isinstance(port_ret, bool) or not isinstance(port_ret, (int, float)) \
+            or not 0.0 <= port_ret <= 1.0:
+        raise ConfigError("开孔段保留系数 必须是 0~1 的数字"
+                          "（0=开孔段全漏，1=完全不漏），实际为: %r" % port_ret)
+
+    # 弹簧预压一致性（v0.6.7）：预压未显式覆盖时按「自由长度 − 装配长度」派生，
+    # 避免只覆盖长度参数后预压与报告显示不一致；显式覆盖的预压优先
+    dev_over = data.get("器件参数覆盖") or {}
+    if "弹簧预压mm" not in dev_over:
+        cfg.device.spring_preload_mm = (cfg.device.spring_free_length_mm
+                                        - cfg.device.spring_installed_length_mm)
+    if cfg.device.spring_preload_mm <= 0:
+        raise ConfigError(
+            "弹簧预压mm 必须大于 0（当前派生值 = 弹簧自由长度mm − 弹簧装配长度mm"
+            " = %g；请检查两项长度参数，或显式覆盖 弹簧预压mm）"
+            % cfg.device.spring_preload_mm)
 
     return cfg

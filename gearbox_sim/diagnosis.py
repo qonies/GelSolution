@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
-"""判定与结论建议：打齿 / 气密时序 / 供蛋窗口 / 啮合齿数 / 压气匹配，
-以及切齿方案枚举对比与建议（是否需要延时器、是否需要切拉桥旗）。"""
+"""判定与结论建议：打齿 / 气密时序 / 供蛋速率 / 啮合齿数 / 压气匹配，
+以及切齿方案枚举对比与建议（是否需要延时器、是否需要切拉桥旗）。
+（✅v3.4：供蛋方式上限=实际支持发射的能力，与射速直接比较；
+供蛋窗口不再与「1000÷上限」对比，判定由 11 项改为 10 项。）"""
 from dataclasses import dataclass, replace
 from typing import List
 
@@ -117,42 +119,32 @@ def run_checks(cfg: SimConfig, dev: DeviceParams, tl, dyn, feed, bal) -> List[Ch
         checks.append(Check("气密时序", LEVEL_OK,
                             "气密裕量 %.2f ms，推嘴在压力建立前就位" % sm))
 
-    # 3. 供蛋窗口
-    if feed.window_ms < feed.min_ms * 0.5:
-        checks.append(Check("供蛋窗口", LEVEL_DANGER,
-                            "窗口 %.1f ms，不足 %.1f ms 要求的一半 → 大概率空发/供不上蛋"
-                            % (feed.window_ms, feed.min_ms)))
-    elif feed.window_ms < feed.min_ms:
-        checks.append(Check("供蛋窗口", LEVEL_WARN,
-                            "窗口 %.1f ms < 最小供蛋时间 %.1f ms（%s）→ 供蛋不稳"
-                            % (feed.window_ms, feed.min_ms, feed.mode)))
-    else:
-        checks.append(Check("供蛋窗口", LEVEL_OK,
-                            "窗口 %.1f ms ≥ %.1f ms（%s），富余 %.1f ms"
-                            % (feed.window_ms, feed.min_ms, feed.mode, feed.slack_ms)))
-
-    # 供蛋方式上限（射速 vs 供蛋机构最高速率）
+    # 3. 供蛋速率（✅v3.4 澄清：供蛋方式上限 = 弹匣/波轮实际支持发射器
+    #    发射水弹的能力，直接与射速比较；不换算每发平均供蛋时间对比供蛋窗口）
     if tl.rof_rps > feed.max_rps:
         checks.append(Check("供蛋速率", LEVEL_DANGER,
-                            "射速 %.1f 发/秒 超过「%s」最高 %.0f 发/秒 → 供蛋机构跟不上，必空发"
+                            "射速 %.1f 发/秒 超过「%s」供蛋能力上限 %.0f 发/秒"
+                            " → 供蛋机构跟不上，必空发"
                             % (tl.rof_rps, feed.mode, feed.max_rps)))
     elif tl.rof_rps > feed.max_rps * 0.9:
         checks.append(Check("供蛋速率", LEVEL_WARN,
-                            "射速 %.1f 发/秒 已达「%s」上限 %.0f 发/秒 的 90%% 以上 → 供蛋接近极限"
+                            "射速 %.1f 发/秒 已达「%s」供蛋能力上限 %.0f 发/秒 的 90%% 以上"
+                            " → 供蛋接近极限"
                             % (tl.rof_rps, feed.mode, feed.max_rps)))
     else:
         checks.append(Check("供蛋速率", LEVEL_OK,
-                            "射速 %.1f 发/秒，在「%s」上限 %.0f 发/秒 之内"
+                            "射速 %.1f 发/秒，在「%s」供蛋能力上限 %.0f 发/秒 之内"
+                            "（能力上限 = 实际支持发射的能力）"
                             % (tl.rof_rps, feed.mode, feed.max_rps)))
 
     # 4. 啮合齿数
     if tl.remain_teeth < th.min_remain_teeth:
         checks.append(Check("啮合齿数", LEVEL_DANGER,
-                            "切齿后仅剩 %d 齿（建议 ≥ %d）→ 半齿啮合/脱齿风险"
+                            "切齿后仅剩 %g 齿（建议 ≥ %d）→ 半齿啮合/脱齿风险"
                             % (tl.remain_teeth, th.min_remain_teeth)))
     else:
         checks.append(Check("啮合齿数", LEVEL_OK,
-                            "剩余 %d 齿啮合" % tl.remain_teeth))
+                            "剩余 %g 齿啮合" % tl.remain_teeth))
 
     # 5. 压气匹配
     if dyn.air_index < th.low_air_index:
@@ -223,7 +215,6 @@ def summarize_scheme(cfg: SimConfig, dev: DeviceParams) -> SchemeRow:
     ratios = [
         bal.return_margin_ms / max(th.gear_clash_margin_ms, 1e-6),
         sm / max(th.air_seal_margin_ms, 1e-6),
-        feed.window_ms / max(cfg.min_feed_ms, 1e-6),
         bal.useful_stroke_mm / max(cfg.barrel_length_mm * th.barrel_match_ratio, 1e-6),
     ]
     score = min(ratios)
@@ -272,35 +263,22 @@ def build_conclusion(cfg: SimConfig, best: SchemeRow, bal=None, tl=None) -> List
                    "建议调整电机/齿比/弹簧后再选切齿方案"
                    % (best.front_cut, best.rear_cut, best.problems))
 
-    # 2) 延时器（已安装则评估效果；未安装则定量建议）
+    # 2) 延时器（✅v3.4：供蛋方式上限 = 实际支持发射的能力，不换算每发平均
+    #    供蛋时间对比窗口——是否需要延时器取决于实测供蛋，不做定量判定）
     delay_ms = tl.delay_ms if tl is not None else 0.0
+    hole_ms = (tl.period_ms / cfg.device.cam_hole_count
+               if tl is not None and cfg.device.cam_hole_count else None)
     if cfg.install_delay:
-        if best.window_ms >= cfg.min_feed_ms:
-            out.append("延时器：已安装（回位推迟 %.1f ms）—— 供蛋窗口已加宽至 %.1f ms，"
-                       "满足 %s 供蛋要求；注意气密裕量同步减小"
-                       % (delay_ms, best.window_ms, cfg.feed_mode))
-        else:
-            gap = cfg.min_feed_ms - best.window_ms
-            max_delay = max(min(best.seal_margin_ms - th.air_seal_margin_ms, 50.0), 0.0)
-            out.append("延时器：已安装（+%.1f ms）但窗口仍缺 %.1f ms；气密裕量只允许再加 "
-                       "%.1f ms —— 需提高延时器延时量、更换高级波轮/压力弹匣或降射速"
-                       % (delay_ms, gap, max_delay))
-    elif best.window_ms < cfg.min_feed_ms:
-        gap = cfg.min_feed_ms - best.window_ms
-        max_delay = max(min(best.seal_margin_ms - th.air_seal_margin_ms, 50.0), 0.0)
-        if gap <= max_delay:
-            hole_rec = ("（≈%.2f 孔）" % (gap / hole_ms)) if hole_ms else ""
-            out.append("是否需要延时器：需要 —— 供蛋窗口缺 %.1f ms；气密裕量允许最多加 "
-                       "%.1f ms 延时，可满足缺口（推荐延时量 %.1f ms%s）"
-                       % (gap, max_delay, gap, hole_rec))
-        else:
-            out.append("是否需要延时器：延时器不足以解决 —— 供蛋窗口缺 %.1f ms，但气密裕量"
-                       "只允许 %.1f ms 延时；需改用更高供蛋上限的方式（高级波轮/压力弹匣）、"
-                       "降射速，或接受气密损失"
-                       % (gap, max_delay))
+        out.append("延时器：已安装（回位推迟 %.1f ms）—— 供蛋窗口加宽至 %.1f ms；"
+                   "注意气密裕量同步减小"
+                   % (delay_ms, best.window_ms))
     else:
-        out.append("是否需要延时器：暂不需要 —— 供蛋窗口 %.1f ms 已满足 %s 供蛋要求"
-                   % (best.window_ms, cfg.feed_mode))
+        hole_note = ("每孔 ≈%.1f ms" % hole_ms) if hole_ms else ""
+        out.append("是否需要延时器：视实测而定 —— 供蛋窗口 %.1f ms；供蛋能力上限"
+                   "（%s %.0f 发/秒）指其实际支持发射的能力，窗口是否足够以实测"
+                   "供蛋为准；若实测供蛋不上可安装延时器加宽窗口（%s），"
+                   "注意气密裕量同步减小"
+                   % (best.window_ms, cfg.feed_mode, cfg.feed_max_rps, hole_note))
 
     # 3) 切拉桥旗（已切则评估效果；未切则按气密裕量建议）
     # 语义：切掉拉桥旗槽 S 形曲线的缓冲尾 → 推嘴更早、更快恢复闭合；

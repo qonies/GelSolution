@@ -29,9 +29,9 @@ VALID = json.loads(json.dumps(DEFAULT_CONFIG))  # 深拷贝
 # ---- simulate_payload ----
 p = simulate_payload(VALID)
 check("payload ok", p["ok"] is True)
-check("overview 初速量级（M90/70缸 ≈70）", 60.0 < p["overview"]["v_m_s"] < 85.0,
+check("overview 初速量级（默认配置 50缸/210管 ≈59）", 45.0 < p["overview"]["v_m_s"] < 85.0,
       "v=%.1f" % p["overview"]["v_m_s"])
-check("11项判定", len(p["checks"]) == 11)
+check("10项判定", len(p["checks"]) == 10)
 check("16方案", len(p["schemes"]) == 16 and "v_m_s" in p["schemes"][0])
 check("10事件", len(p["events"]) == 10)
 check("报告文本", "水弹初速" in p["report_text"] and "结论建议" in p["report_text"])
@@ -39,8 +39,9 @@ check("结论非空", len(p["conclusions"]) >= 3)
 
 # 初速超阈值标志传给前端
 strong = json.loads(json.dumps(VALID))
-strong["弹簧"] = "M110"; strong["气缸类型"] = "60%"
+strong["弹簧"] = "M110"; strong["气缸类型"] = "70%"
 strong["内管管径"] = "7.3"; strong["水弹直径"] = "7.3"
+strong["内管长度mm"] = 350
 p2 = simulate_payload(strong)
 check("强力配置初速超80", p2["overview"]["v_m_s"] > 80.0,
       "v=%.1f" % p2["overview"]["v_m_s"])
@@ -62,6 +63,13 @@ html = urllib.request.urlopen(base + "/", timeout=5).read().decode("utf-8")
 check("GET / 返回界面", "水弹波箱运作数据模拟" in html and "api/simulate" in html)
 d = json.loads(urllib.request.urlopen(base + "/api/default", timeout=5).read().decode("utf-8"))
 check("GET /api/default", d["电机"]["标称转速RPM"] == 30000)
+check("GET /api/default 预填阈值/器件默认值",
+      d["判定阈值覆盖"].get("打齿安全裕量ms") == 2.0
+      and d["判定阈值覆盖"].get("最少保留啮合齿数") == 8
+      and d["器件参数覆盖"].get("气动效率") == 0.243
+      and d["器件参数覆盖"].get("开孔段保留系数") == 0.6
+      and d["器件参数覆盖"].get("弹簧预压mm") == 62.5
+      and "弹簧刚度表" not in d["器件参数覆盖"])
 
 req = urllib.request.Request(base + "/api/simulate", method="POST",
                              data=json.dumps(VALID).encode("utf-8"),

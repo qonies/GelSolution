@@ -15,7 +15,12 @@
 ## 运行
 - `python run.py [-c configs/xxx.json]`（命令行报告）
 - `python webui.py [--port 8765] [--no-browser]`（本地网页界面，实时调参）
-- `python tests/test_sim.py`（引擎 127 项）/ `python tests/test_webapp.py`（接口 14 项）
+- `python tests/test_sim.py`（引擎 189 项）/ `python tests/test_webapp.py`（接口 15 项）
+
+## 电机参数口径（v0.6.4 ✅用户确认）
+- 曲线模式（选 电机.型号）：负载系数固定 1、标称转速RPM 锁定为曲线空载值，
+  均不可修改（JSON 显式配置报错；网页输入框禁用）；电池模型/堵转/变转速生效
+- 固定转速模式（未选型号）：标称转速RPM 必填，负载系数默认 0.8 可覆盖
 
 ## 网页界面（webapp.py + web/index.html）
 - 后端：仅标准库 http.server（ThreadingHTTPServer）
@@ -28,7 +33,14 @@
 
 ## 版本控制
 - git 仓库（2026-09-08 初始化，Windows git）；项目版本号见
-  gearbox_sim/__init__.py（当前 0.5.9）；历史沿革见 activeContext.md
+  gearbox_sim/__init__.py（当前 0.7.2）；历史沿革见 activeContext.md
+
+## 电机曲线库（motor.py MOTOR_CURVES，来源「电机性能曲线/」CHAOLI 11.1V 图）
+- 超力无刷4W8：48000 RPM / 473.70 mN·m / 3.7A / 222A
+- 超力无刷3W9：39000 RPM / 401.80 mN·m / 2.4A / 156A（v0.6.3 新增）
+- 超力有刷3W5：35500 RPM / 414.86 mN·m / 3.5A / 146A
+- 超力有刷3W3：32800 RPM / 450.20 mN·m / 2.8A / 145A（v0.6.3 新增；
+  空载取 At No Load 表格值 32800，非标题 33000）
 
 ## 关键单位约定
 - 时间 ms、角度 度（°）、长度 mm、质量 g、弹簧刚度 N/mm、能量 mJ

@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .params import SimConfig
-from .components import DeviceParams
+from .components import DeviceParams, TAPPET_STOCK_BITE
 from . import motor as _motor
 
 
@@ -35,7 +35,7 @@ class Timeline:
     batt_shots: Optional[float]     # 理论续航（发；None=未配置电池）
     pickup_deg: float       # 活塞拾取角（切齿后）
     release_deg: float      # 活塞释放角（切齿后）
-    remain_teeth: int       # 切齿后剩余啮合齿数
+    remain_teeth: float     # 切齿后剩余咬合齿数（可为半齿，如 13.5 齿天梯）
     stroke_mm: float        # 活塞拉控行程
     stroke_ratio: float     # 行程 / 满行程
     pickup_ms: float        # 本循环活塞拾取时刻
@@ -48,6 +48,7 @@ class Timeline:
     seat_deg: float         # 回位完成有效角（含延时器占孔角）
     delay_ms: float         # 延时器推迟量 ms（角度级几何换算；未装为 0）
     next_pickup_ms: float   # 下一循环活塞拾取时刻
+    next_retract_ms: float  # 下一循环推嘴开始缩回时刻（前切时可能早于拾取）
 
 
 def build_timeline(cfg: SimConfig, dev: DeviceParams) -> Timeline:
@@ -87,14 +88,19 @@ def build_timeline(cfg: SimConfig, dev: DeviceParams) -> Timeline:
     full_arc = dev.sector_full_teeth * pitch          # 满齿弧（默认 16×11.25=180°）
     pickup_deg = cfg.front_cut * pitch                # 前切 → 拾取推迟
     release_deg = full_arc - cfg.rear_cut * pitch     # 后切 → 提前释放
-    remain = dev.sector_full_teeth - cfg.front_cut - cfg.rear_cut
+    # 蛋糕齿实际可咬合的天梯齿数（天梯齿数，半齿计整齿）：咬合 = min(扇齿满
+    # 啮合, ceil(天梯齿数))；剩余咬合齿数决定实际拉程——原装咬合 14 齿对应
+    # 满行程实测 60.5mm，拉程 = 满行程 × min(剩余咬合, 14) / 14（封顶满行程）
+    bite = dev.tappet_bite()
+    remain = bite - cfg.front_cut - cfg.rear_cut
 
-    stroke_ratio = max(remain, 0) * pitch / full_arc
+    stroke_ratio = min(max(remain, 0), TAPPET_STOCK_BITE) / TAPPET_STOCK_BITE
     stroke_mm = dev.piston_full_stroke_mm * stroke_ratio
 
     # 变转速循环：拉动弧段（拾取→释放）用负载转速，空转弧段用近空载转速；
     # 角度→时间按分段转换（固定转速模式两段相同，退化为匀速）
-    rpm_free = rpm if minfo is None else minfo.no_load_rpm * cfg.load_factor
+    # 曲线模式负载系数固定为 1（✅用户确认 v0.6.4）：空转段按曲线空载转速
+    rpm_free = rpm if minfo is None else minfo.no_load_rpm
     msdeg_l = 60000.0 * ratio / (360.0 * max(rpm, 1.0))       # 拉动段 ms/°
     msdeg_f = 60000.0 * ratio / (360.0 * max(rpm_free, 1.0))  # 空转段 ms/°
 
@@ -131,6 +137,9 @@ def build_timeline(cfg: SimConfig, dev: DeviceParams) -> Timeline:
                 if cfg.install_delay else 0.0)
 
     next_pickup_ms = period_ms + pickup_ms
+    # 下一循环推嘴开始缩回：缩回起点角固定于扇齿（11.25°），前切 n≥2 时
+    # 下一循环缩回早于下一循环拾取 → 单循环时序终点取下一循环首个事件
+    next_retract_ms = period_ms + retract_start_ms
 
     return Timeline(
         period_ms=period_ms, rof_rps=1000.0 / period_ms,
@@ -146,5 +155,5 @@ def build_timeline(cfg: SimConfig, dev: DeviceParams) -> Timeline:
         window_start_ms=window_start_ms, window_end_ms=window_end_ms,
         window_end_deg=window_end_deg,
         seat_ms=seat_ms, seat_deg=seat_deg, delay_ms=delay_ms,
-        next_pickup_ms=next_pickup_ms,
+        next_pickup_ms=next_pickup_ms, next_retract_ms=next_retract_ms,
     )

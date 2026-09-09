@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """中文模拟报告生成（一站式流程见 render_full）。"""
+import math
+
 from .params import SimConfig
 from .components import DeviceParams
 from .timing import Timeline, build_timeline
@@ -40,6 +42,21 @@ def _scheme_table(rows):
 def events_list(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn: Dynamics,
                 feed: FeedResult, bal: Ballistics):
     """单循环事件列表（文本报告与网页界面共用）。"""
+    # 单循环终点 = 下一循环首个事件（✅v3.5：推嘴缩回起点角固定于扇齿 11.25°，
+    # 前切 n≥2 时下一循环推嘴缩回早于下一循环活塞拾取，不能固定为拾取）
+    margin_note = "回位裕量 %.2f ms" % bal.return_margin_ms
+    next_retract_ms = tl.period_ms + tl.retract_start_ms
+    if next_retract_ms < tl.next_pickup_ms - 1e-9:
+        last = {"t": next_retract_ms, "angle": dev.cam_retract_start_deg + 360,
+                "desc": "下一循环推嘴开始缩回（前切：早于下一循环拾取 %.2f ms；%s）"
+                        % (tl.next_pickup_ms - next_retract_ms, margin_note)}
+    elif next_retract_ms > tl.next_pickup_ms + 1e-9:
+        last = {"t": tl.next_pickup_ms, "angle": tl.pickup_deg + 360,
+                "desc": "下一循环活塞拾取（%s）" % margin_note}
+    else:
+        last = {"t": tl.next_pickup_ms, "angle": tl.pickup_deg + 360,
+                "desc": "下一循环活塞拾取 = 推嘴开始缩回（前切1，两者重合；%s）"
+                        % margin_note}
     return [
         {"t": tl.pickup_ms, "angle": tl.pickup_deg, "desc": "活塞拾取，开始被拉动"},
         {"t": tl.retract_start_ms, "angle": dev.cam_retract_start_deg, "desc": "推嘴开始缩回"},
@@ -57,8 +74,7 @@ def events_list(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn: Dynamics,
          "desc": "水弹出膛（管内飞行估算，有效推力行程 %.0f mm / 内管 %.0f mm）"
                  % (bal.useful_stroke_mm, cfg.barrel_length_mm)},
         {"t": bal.settle_done_ms, "angle": None, "desc": "活塞回位稳定（裕量止点）"},
-        {"t": tl.next_pickup_ms, "angle": tl.pickup_deg + 360,
-         "desc": "下一循环活塞拾取（回位裕量 %.2f ms）" % bal.return_margin_ms},
+        last,
     ]
 
 
@@ -78,26 +94,28 @@ def render(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn: Dynamics,
         L.append("电机型号     : %s（%s，%.0fV：空载 %.0f RPM / 堵转 %.0f mN·m）"
                  % (cfg.motor_model, mtype, mc["voltage_v"],
                     mc["no_load_rpm"], mc["stall_torque_mNm"]))
-        lf_note = "" if cfg.load_factor == 1.0 \
-            else "，已乘负载系数 %.2f" % cfg.load_factor
-        L.append("负载转速     : %.0f RPM（弹簧负载反射到电机轴，峰值扭矩为堵转的 %.0f%%%s）"
-                 % (tl.loaded_rpm, tl.torque_peak_ratio * 100, lf_note))
+        L.append("负载转速     : %.0f RPM（弹簧负载反射到电机轴，峰值扭矩为堵转的 %.0f%%）"
+                 % (tl.loaded_rpm, tl.torque_peak_ratio * 100))
     else:
         L.append("电机标称转速 : %g RPM%s" % (
             cfg.motor_rpm,
             "" if cfg.load_factor == 1.0 else "（负载系数 %.2f → 按 %.0f RPM 计算）"
             % (cfg.load_factor, cfg.motor_rpm * cfg.load_factor)))
     L.append("齿轮比       : %s" % cfg.ratio)
-    L.append("切齿方案     : %s（剩余 %d 齿啮合）" % (_cut_tag(cfg.front_cut, cfg.rear_cut), tl.remain_teeth))
-    L.append("气缸类型     : %s（气量系数 %.2f）" % (cfg.cylinder, dev.cylinder_factor[cfg.cylinder]))
+    L.append("切齿方案     : %s（剩余 %g 齿咬合；天梯 %g 齿计 %d 齿，咬合上限 %d 齿）"
+             % (_cut_tag(cfg.front_cut, cfg.rear_cut), tl.remain_teeth,
+                dev.tappet_teeth, math.ceil(dev.tappet_teeth), dev.tappet_bite()))
+    L.append("气缸类型     : %s（气量系数 %.2f，开孔段保留 %.2f）"
+             % (cfg.cylinder, dev.cylinder_factor[cfg.cylinder],
+                dev.port_retention))
     L.append("气缸规格     : 内径 %.1f mm × 长度 %.0f mm（活塞行程 %.1f mm，LDX 1.0 基准）"
              % (dev.cylinder_bore_mm, dev.cylinder_length_mm, dev.piston_full_stroke_mm))
     L.append("弹簧硬度     : %s（刚度 %.2f N/mm）" % (cfg.spring, dyn.k_n_per_mm))
     L.append("内管/水弹    : 内管 %.0f mm，管径 %s，水弹 %s（单边间隙 %.2f mm，泄气损失 %.0f%%）"
              % (cfg.barrel_length_mm, cfg.barrel_bore, cfg.ball_diameter,
                 bal.gap_mm, bal.leak_ratio * 100))
-    L.append("供蛋方式     : %s（最高 %.0f 发/秒，最小供蛋间隔 %.1f ms）"
-             % (feed.mode, feed.max_rps, feed.min_ms))
+    L.append("供蛋方式     : %s（供蛋能力上限 %.0f 发/秒 = 实际支持发射的能力）"
+             % (feed.mode, feed.max_rps))
     mods = []
     if cfg.install_delay:
         mods.append("已安装延时器（占 %.1f 孔，回位推迟 %.1f ms）"
@@ -162,7 +180,7 @@ def render(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn: Dynamics,
     L.append("-" * 62)
     if cfg.motor_model is None and cfg.load_factor == 1.0:
         L.append("提示：当前按电机标称转速计算（未折算负载降速），射速偏高，")
-        L.append("      判定偏严苛。提供电机负载曲线后可接入负载系数修正。")
+        L.append("      判定偏严苛。选择电机型号后按 CHAOLI 性能曲线计算负载转速。")
     L.append("提示：本报告为简化模型的数据模拟；以下器件参数为估算值，"
              "结论精度依赖校准：")
     L.append("      弹簧刚度表、弹簧预压、活塞质量/行程、气缸内径、凸轮槽角度、"

@@ -6,6 +6,10 @@
     见工程目录「电机性能曲线/」）：
       - 超力无刷 4W8：空载 48000 RPM，堵转 473.7 mN·m（222 A）
       - 超力有刷 3W5：空载 35500 RPM，堵转 414.9 mN·m（146 A）
+      - 超力无刷 3W9：空载 39000 RPM，堵转 401.8 mN·m（156 A）
+      - 超力有刷 3W3：空载 32800 RPM，堵转 450.2 mN·m（145 A）
+     （空载转速取图中 At No Load 表格精确值，如 3W3 表格 32800 / 标题 33000）
+
   * 电压工况（✅用户更正）：曲线基于标称 3.7V/芯（11.1V = 3S 标称），
     实际使用均充满至 4.2V/芯（3S 满电 12.6V，较曲线电压高 ~13.5%）——
     配置电池后按满电电压缩放电机性能，电压跌落自满电起算。
@@ -20,6 +24,8 @@ import math
 from dataclasses import dataclass
 from typing import Optional
 
+from .components import TAPPET_STOCK_BITE
+
 BATT_CELL_V = 3.7    # 锂电每芯标称电压 (V)
 FULL_CELL_V = 4.2    # 锂电每芯满电电压 (V)（实际工况，✅用户更正）
 CURVE_REF_V = 11.1   # 电机曲线的测试电压 (V = 3.7V × 3S 标称)
@@ -33,11 +39,27 @@ MOTOR_CURVES = {
         "type": "无刷",
         "voltage_v": 11.1,
     },
+    "超力无刷3W9": {
+        "no_load_rpm": 39000.0,
+        "stall_torque_mNm": 401.80,
+        "no_load_current_a": 2.4,
+        "stall_current_a": 156.0,
+        "type": "无刷",
+        "voltage_v": 11.1,
+    },
     "超力有刷3W5": {
         "no_load_rpm": 35500.0,
         "stall_torque_mNm": 414.86,
         "no_load_current_a": 3.5,
         "stall_current_a": 146.0,
+        "type": "有刷",
+        "voltage_v": 11.1,
+    },
+    "超力有刷3W3": {
+        "no_load_rpm": 32800.0,
+        "stall_torque_mNm": 450.20,
+        "no_load_current_a": 2.8,
+        "stall_current_a": 145.0,
         "type": "有刷",
         "voltage_v": 11.1,
     },
@@ -77,17 +99,19 @@ def resolve_loaded_rpm(cfg, dev):
     """返回 (负载转速 RPM, MotorInfo 或 None, BatteryInfo 或 None)。
 
     未选择电机型号时返回 (标称转速 × 负载系数, None, None)，即固定转速模式
-    （固定模式不使用电池数据；负载系数默认 0.8）。
-    曲线模式下负载系数作为最终降额乘数（无刷默认 0.9 / 有刷默认 0.8），
-    只缩放负载转速，不影响扭矩、堵转与电流计算。
+    （固定模式不使用电池数据；负载系数默认 0.8，可显式覆盖）。
+    曲线模式（选型号）下负载系数固定为 1（✅用户确认 v0.6.4：选型后负载系数
+    与标称转速均锁定、不可修改），负载转速按曲线直接计算，不乘负载系数。
     """
     ratio = cfg.ratio_value
     if not cfg.motor_model:
         return cfg.motor_rpm * cfg.load_factor, None, None
 
     m = MOTOR_CURVES[cfg.motor_model]
-    remain_ratio = max(dev.sector_full_teeth - cfg.front_cut - cfg.rear_cut, 0) \
-        / dev.sector_full_teeth
+    # 咬合齿数（半齿计整齿）与拉程比例：原装咬合 14 齿对应满行程（封顶）
+    bite = min(dev.sector_full_teeth, math.ceil(dev.tappet_teeth))
+    remain_ratio = min(max(bite - cfg.front_cut - cfg.rear_cut, 0),
+                       TAPPET_STOCK_BITE) / TAPPET_STOCK_BITE
     s = dev.piston_full_stroke_mm / 1000.0 * remain_ratio   # 实际拉程 (m)
     r = dev.piston_full_stroke_mm / 1000.0 / math.pi        # 扇齿分度圆半径 (m)
     k = dev.spring_stiffness[cfg.spring] * 1000.0           # N/m
@@ -124,10 +148,10 @@ def resolve_loaded_rpm(cfg, dev):
     scale = v_eff / CURVE_REF_V
 
     stall = t_peak >= t_stall_ref * scale
-    # 负载系数降额（无刷默认 0.9 / 有刷默认 0.8）：曲线为理论值，
-    # 实际受摩擦/供电等折损，只缩放负载转速，不影响扭矩与堵转判定
+    # 曲线模式负载系数固定为 1（✅用户确认 v0.6.4）：负载转速按曲线直接计算，
+    # 不乘负载系数（固定转速模式的负载系数已在 resolve 入口处生效）
     n_load = 0.0 if stall else m["no_load_rpm"] * scale \
-        * (1.0 - t_avg / (t_stall_ref * scale)) * cfg.load_factor
+        * (1.0 - t_avg / (t_stall_ref * scale))
 
     # 拉簧段平均电流需求（按有效电压下的工作点）
     frac_avg = min(t_avg / (t_stall_ref * scale), 1.0) if t_stall_ref * scale > 0 else 0.0

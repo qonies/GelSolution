@@ -19,10 +19,25 @@ from .feeding import evaluate
 from .ballistics import compute as compute_bal
 from .diagnosis import (run_checks, enumerate_cut_schemes, build_conclusion,
                         seal_margin_ms)
+from .components import (DeviceParams, Thresholds, DEVICE_KEY_MAP,
+                         THRESHOLD_KEY_MAP)
 from .report import render, events_list
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 
+
+def _scalar_defaults(key_map: dict, obj) -> dict:
+    """按中文键映射导出可展示的标量默认值（排除弹簧刚度表等表类型参数，
+    供网页「判定阈值 / 器件参数覆盖」输入框预填，单一数据源避免漂移）。"""
+    out = {}
+    for cn, attr in key_map.items():
+        val = getattr(obj, attr)
+        if isinstance(val, (int, float)) and not isinstance(val, bool):
+            out[cn] = val
+    return out
+
+
+# 网页默认配置：器件参数 / 判定阈值预填引擎默认值（✅用户需求：显示默认供参考修改）
 DEFAULT_CONFIG = {
     "电机": {"标称转速RPM": 30000},
     "齿轮比": "13:1",
@@ -32,9 +47,9 @@ DEFAULT_CONFIG = {
     "内管长度mm": 210.0,
     "内管管径": "7.5",
     "水弹直径": "7.2",
-    "供蛋": {"方式": "普通波轮", "最小供蛋时间ms": None},
-    "器件参数覆盖": {},
-    "判定阈值覆盖": {},
+    "供蛋": {"方式": "普通波轮"},
+    "器件参数覆盖": _scalar_defaults(DEVICE_KEY_MAP, DeviceParams()),
+    "判定阈值覆盖": _scalar_defaults(THRESHOLD_KEY_MAP, Thresholds()),
 }
 
 
@@ -72,7 +87,7 @@ def simulate_payload(data: dict) -> dict:
             "gap_mm": bal.gap_mm, "leak_ratio": bal.leak_ratio,
             "return_margin_ms": bal.return_margin_ms,
             "seal_margin_ms": seal_margin_ms(tl, bal),
-            "window_ms": feed.window_ms, "min_feed_ms": cfg.min_feed_ms,
+            "window_ms": feed.window_ms,
             "feed_max_rps": cfg.feed_max_rps,
             "air_index": dyn.air_index, "t_fire_ms": bal.t_fire_ms,
             "energy_mj": dyn.energy_mj, "v_release_m_s": dyn.v_release_m_s,

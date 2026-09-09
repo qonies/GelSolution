@@ -99,7 +99,11 @@ def compute(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn) -> Ballistics:
     # 水桶效应（✅用户更正）：孔位固定于缸体（以满行程标定），
     # 有效密封段 = min(气缸系数×满行程, 实际行程)——不是 f×s 的叠加缩减
     seal_dist = min(f * s_full, s)
-    V_seal = V_dead + A_cyl * seal_dist    # 密封瞬间弹后容积（绝热基准）
+    V_start = V_dead + A_cyl * s            # 释放瞬间弹后容积（开孔段多变压缩基准）
+    gamma_port = gamma * dev.port_retention  # 开孔段等效多变指数：
+                                             # 保留 0=全漏（直通大气）；1=完全不漏
+    seal_P = None                            # 密封瞬间保留的压力（进入密封段时记录）
+    seal_V = None                            # 密封瞬间弹后容积（绝热基准）
     x_p = 0.0
     x_b = 0.0
     v_b = 0.0
@@ -114,15 +118,33 @@ def compute(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn) -> Ballistics:
 
     while t < _T_CAP and not (ball_done and strike_t is not None):
         d = max(s - x_p, 0.0)
-        P = p_atm
-        # 密封段：剩余行程已进入密封段（活塞头盖过气孔）→ 绝热压缩
-        if d <= seal_dist + 1e-12 and V_seal > 0:
-            V = V_dead + A_cyl * d + A_push * x_b
+        V = V_dead + A_cyl * d + A_push * x_b
+        # 密封段：活塞头已盖过气孔 → 绝热压缩（自密封瞬间保留的 P、V 起算）
+        if d <= seal_dist + 1e-12:
+            if seal_P is None:
+                # 密封瞬间：开孔段部分漏气后保留的气压（✅用户更正：有漏但
+                # 非全漏；无开孔段/保留 0 → p_atm）
+                seal_V = V
+                seal_P = (min(p_atm * (V_start / V) ** gamma_port, _P_CAP)
+                          if gamma_port > 1e-9 and V > 1e-12 else p_atm)
             if V > 1e-12:
-                P = min(p_atm * (V_seal / V) ** gamma, _P_CAP)
+                P = min(seal_P * (seal_V / V) ** gamma, _P_CAP)
+            else:
+                P = p_atm
             p_max = max(p_max, P)
             if t_rise is None and P >= p_atm * 1.1:
                 t_rise = t  # 压力显著建立（推嘴须在此之前就位，否则漏气）
+        else:
+            # 开孔段：4 条横槽漏气（✅用户更正）——活塞经过极快，横槽来不及
+            # 漏掉全部已压缩气体（有漏但非全漏）→ 等效多变压缩：
+            # γ_port = 保留系数 × γ（0=全漏=直通大气；1=完全不漏=绝热密封）
+            if gamma_port > 1e-9 and V > 1e-12:
+                P = min(p_atm * (V_start / V) ** gamma_port, _P_CAP)
+            else:
+                P = p_atm
+            p_max = max(p_max, P)
+            if t_rise is None and P >= p_atm * 1.1:
+                t_rise = t
 
         # 水弹：受气压差驱动（气压降至大气压后不再有净推力）
         dp_pa = (P - p_atm) * 1000.0  # kPa → Pa

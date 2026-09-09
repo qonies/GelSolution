@@ -57,16 +57,18 @@ tr.hl td{background:#eaf1ff}
 <header><h1>水弹波箱运作数据模拟</h1><span>本地网页界面 · 实时数据模拟 · 无动画 · 通用二号波</span></header>
 <main>
 <section id="params">
-  <div class="group"><label>电机型号（选型后按性能曲线计算负载转速）</label>
+  <div class="group"><label>电机型号（选型后按性能曲线计算负载转速；标称转速与负载系数随之锁定）</label>
     <select id="motorModel">
       <option value="">固定转速（手动输入下方转速）</option>
-      <option value="超力无刷4W8">超力无刷 4W8（空载 48000 RPM / 11.1V）</option>
-      <option value="超力有刷3W5">超力有刷 3W5（空载 35500 RPM / 11.1V）</option>
+      <option value="超力无刷4W8" data-rpm="48000">超力无刷 4W8（空载 48000 RPM / 11.1V）</option>
+      <option value="超力无刷3W9" data-rpm="39000">超力无刷 3W9（空载 39000 RPM / 11.1V）</option>
+      <option value="超力有刷3W5" data-rpm="35500">超力有刷 3W5（空载 35500 RPM / 11.1V）</option>
+      <option value="超力有刷3W3" data-rpm="32800">超力有刷 3W3（空载 32800 RPM / 11.1V）</option>
     </select></div>
-  <div class="group"><label>电机标称转速 RPM（仅固定转速模式生效）</label>
+  <div class="group"><label>电机标称转速 RPM（仅固定转速模式可改；选型号后锁定为其曲线标称转速）</label>
     <div class="row"><input type="range" id="rpmS" min="5000" max="60000" step="500" style="flex:1">
       <input type="number" id="rpm" min="1000" max="100000" step="100" style="width:92px"></div></div>
-  <div class="group"><label>负载系数（留空 = 自动：无刷 0.9 / 有刷·固定 0.8）</label>
+  <div class="group"><label>负载系数（仅固定转速模式可改，默认 0.8；选型号后固定为 1）</label>
     <div class="row"><input type="range" id="lfS" min="0.3" max="1" step="0.05" style="flex:1">
       <input type="number" id="lf" min="0.1" max="1" step="0.05" style="width:70px" placeholder="自动"></div></div>
   <div class="group duo">
@@ -93,7 +95,7 @@ tr.hl td{background:#eaf1ff}
       <option>M75</option><option>M80</option><option>M85</option><option selected>M90</option>
       <option>M95</option><option>M100</option><option>M110</option></select></div>
     <div><label>供蛋方式</label><select id="feedMode">
-      <option value="普通波轮" selected>普通波轮（≤30发/秒）</option><option value="高级波轮">高级波轮（≤50发/秒）</option><option value="压力弹匣">压力弹匣（≤60发/秒）</option></select></div>
+      <option value="普通波轮" selected>普通波轮（≤30发/秒）</option><option value="高级波轮">高级波轮（≤60发/秒）</option><option value="压力弹匣">压力弹匣（≤80发/秒）</option></select></div>
   </div>
   <div class="group duo">
     <div><label>前切齿数（切蛋糕齿）</label><input type="number" id="fc" min="0" max="6" step="1" value="0"></div>
@@ -108,9 +110,7 @@ tr.hl td{background:#eaf1ff}
     <div><label>水弹直径</label><select id="ball">
       <option selected value="7.2">7.2</option><option value="7.3">7.3</option></select></div>
   </div>
-  <div class="group"><label>最小供蛋时间 ms（留空 = 按供蛋方式默认）</label>
-    <input type="number" id="feedMin" min="1" step="1" placeholder="自动"></div>
-  <details><summary>判定阈值（留空 = 默认）</summary>
+  <details><summary>判定阈值（已预填系统默认值，可参考或修改）</summary>
     <div class="group duo"><div><label>打齿安全裕量 ms</label><input type="number" id="thClash" step="0.1"></div>
       <div><label>气密最小裕量 ms</label><input type="number" id="thSeal" step="0.1"></div></div>
     <div class="group duo"><div><label>初速警告阈值 m/s</label><input type="number" id="thV" step="1"></div>
@@ -118,8 +118,8 @@ tr.hl td{background:#eaf1ff}
     <div class="group duo"><div><label>压气不足阈值</label><input type="number" id="thAir" step="0.05"></div>
       <div><label>最少保留啮合齿数</label><input type="number" id="thTeeth" step="1"></div></div>
   </details>
-  <details><summary>器件参数覆盖（默认为 LDX 1.0 二号波估算值，可实测校准）</summary>
-    <div style="font-size:12px;color:var(--sub);margin-bottom:6px">⚠ 弹簧刚度、预压、气缸内径、凸轮角度等均为估算默认值；实测后在此填写将覆盖默认。</div>
+  <details><summary>器件参数覆盖（已预填系统默认值，可修改 / 实测校准）</summary>
+    <div style="font-size:12px;color:var(--sub);margin-bottom:6px">以下为 LDX 1.0 二号波默认参数（含【估算】值，报告尾部附估算清单）；可直接参考，实测后修改将覆盖默认。清空某项 = 恢复该系统默认。</div>
     <div class="group duo"><div><label>气动效率</label><input type="number" id="dvEff" step="0.01"></div>
       <div><label>水弹质量 g</label><input type="number" id="dvMass" step="0.01"></div></div>
     <div class="group duo"><div><label>气缸内径 mm</label><input type="number" id="dvBore" step="0.1"></div>
@@ -128,6 +128,10 @@ tr.hl td{background:#eaf1ff}
       <div><label>弹簧预压 mm</label><input type="number" id="dvPreload" step="0.5"></div></div>
     <div class="group duo"><div><label>泄气损失系数</label><input type="number" id="dvLeak" step="0.1"></div>
       <div><label>活塞满行程 mm</label><input type="number" id="dvStroke" step="1"></div></div>
+    <div class="group duo"><div><label>天梯齿数（原装 13.5；半齿计整齿，11.5→12）</label><input type="number" id="dvTappet" step="0.5"></div>
+      <div><label>活塞质量 g</label><input type="number" id="dvPistonMass" step="0.5"></div></div>
+    <div class="group duo"><div><label>开孔段保留系数（0=全漏，1=不漏）</label><input type="number" id="dvPortRet" step="0.05"></div>
+      <div><label>撞击回弹系数</label><input type="number" id="dvResti" step="0.05"></div></div>
     <div class="group duo"><div><label>推嘴回位起始角 °</label><input type="number" id="dvRetS" step="1"></div>
       <div><label>推嘴回位完成角 °</label><input type="number" id="dvRetE" step="1"></div></div>
     <div class="group duo"><div><label>延时器占孔数（1孔=36°，装延时器=2孔）</label><input type="number" id="dvDelay" step="0.5"></div>
@@ -162,6 +166,7 @@ tr.hl td{background:#eaf1ff}
 "use strict";
 const $ = id => document.getElementById(id);
 let timer = null, current = {};
+let DEVDEF = {}, THDEF = {};   // 系统默认值（/api/default 下发，供输入框预填与回退）
 
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 function showErr(msg){const e=$("err");if(msg){e.textContent="✗ "+msg;e.style.display="block";}else{e.style.display="none";}}
@@ -170,11 +175,15 @@ function cutTag(f,r){if(!f&&!r)return"无切";let p=[];if(f)p.push("前切"+f);i
 /* ---- 收集表单 → 配置JSON（空值不下发，走引擎默认） ---- */
 function collect(){
   const num = id => {const v=$(id).value.trim();return v===""?null:parseFloat(v);};
-  const motorBlock = {"标称转速RPM":parseFloat($("rpm").value)||0};
-  const lfV = num("lf");
-  if(lfV!==null) motorBlock["负载系数"] = lfV;   // 留空 = 按电机类型自动默认
   const mm = $("motorModel").value;
-  if(mm) motorBlock["型号"] = mm;
+  const motorBlock = {};
+  if(mm){
+    motorBlock["型号"] = mm;   // 曲线模式：负载系数固定 1、标称转速锁定为曲线值（不下发）
+  }else{
+    motorBlock["标称转速RPM"] = parseFloat($("rpm").value)||0;
+    const lfV = num("lf");
+    if(lfV!==null) motorBlock["负载系数"] = lfV;   // 留空 = 默认 0.8（仅固定转速模式）
+  }
   const cfg = {
     "电机": motorBlock,
     "齿轮比":$("ratio").value,
@@ -182,7 +191,7 @@ function collect(){
     "气缸类型":$("cyl").value,"弹簧":$("spring").value,
     "内管长度mm":parseFloat($("bl").value)||210,
     "内管管径":$("bore").value,"水弹直径":$("ball").value,
-    "供蛋":{"方式":$("feedMode").value,"最小供蛋时间ms":num("feedMin")},
+    "供蛋":{"方式":$("feedMode").value},
     "器件参数覆盖":{},"判定阈值覆盖":{}
   };
   if($("battCells").value){
@@ -195,8 +204,10 @@ function collect(){
   if($("modFlag").checked) mods["切拉桥旗"] = true;
   if(Object.keys(mods).length) cfg["改装"] = mods;
   const devMap={"dvEff":"气动效率","dvMass":"水弹质量g","dvBore":"气缸内径mm","dvCylLen":"气缸长度mm",
+                "dvPortRet":"开孔段保留系数","dvResti":"撞击回弹系数",
                 "dvDead":"气缸余隙容积cm3","dvPreload":"弹簧预压mm","dvLeak":"泄气损失系数",
-                "dvStroke":"活塞满行程mm","dvRetS":"推嘴回位起始角","dvRetE":"推嘴回位完成角",
+                "dvStroke":"活塞满行程mm","dvTappet":"天梯齿数","dvPistonMass":"活塞质量g",
+                "dvRetS":"推嘴回位起始角","dvRetE":"推嘴回位完成角",
                 "dvDelay":"延时器占孔数","dvFlag":"切拉桥旗提前ms"};
   for(const [id,k] of Object.entries(devMap)){const v=num(id);if(v!==null)cfg["器件参数覆盖"][k]=v;}
   const thMap={"thClash":"打齿安全裕量ms","thSeal":"气密最小裕量ms","thV":"初速警告阈值m/s",
@@ -207,9 +218,12 @@ function collect(){
 
 /* ---- 表单 ← 配置JSON（导入用） ---- */
 function applyConfig(c){
-  if(c["电机"]){$("rpm").value=c["电机"]["标称转速RPM"];
-    $("lf").value=c["电机"]["负载系数"]!=null?c["电机"]["负载系数"]:"";
-    $("motorModel").value=c["电机"]["型号"]||"";}
+  if(c["电机"]){
+    $("motorModel").value=c["电机"]["型号"]||"";
+    if(!c["电机"]["型号"])$("rpm").value=c["电机"]["标称转速RPM"];
+    $("lf").value=(!c["电机"]["型号"]&&c["电机"]["负载系数"]!=null)?c["电机"]["负载系数"]:"";
+    syncMotorLock();
+  }
   if(c["电池"]){$("battCells").value=String(c["电池"]["电芯数"]||"");
     $("battCap").value=c["电池"]["容量mAh"]!=null?c["电池"]["容量mAh"]:"";
     $("battC").value=c["电池"]["放电倍率"]!=null?c["电池"]["放电倍率"]:"";}
@@ -225,16 +239,18 @@ function applyConfig(c){
   if(c["水弹直径"])$("ball").value=String(c["水弹直径"]);
   if(c["供蛋"]){let fm=c["供蛋"]["方式"]||"普通波轮";
     if(fm==="波轮")fm="普通波轮"; if(fm==="压力")fm="压力弹匣";
-    $("feedMode").value=fm;
-    $("feedMin").value=c["供蛋"]["最小供蛋时间ms"]!=null?c["供蛋"]["最小供蛋时间ms"]:"";}
+    $("feedMode").value=fm;}
+  else{$("feedMode").value="普通波轮";}
   const revDev={"气动效率":"dvEff","水弹质量g":"dvMass","气缸内径mm":"dvBore","气缸长度mm":"dvCylLen",
+                "开孔段保留系数":"dvPortRet","撞击回弹系数":"dvResti",
                 "气缸余隙容积cm3":"dvDead","弹簧预压mm":"dvPreload","泄气损失系数":"dvLeak",
-                "活塞满行程mm":"dvStroke","推嘴回位起始角":"dvRetS","推嘴回位完成角":"dvRetE",
+                "活塞满行程mm":"dvStroke","天梯齿数":"dvTappet","活塞质量g":"dvPistonMass",
+                "推嘴回位起始角":"dvRetS","推嘴回位完成角":"dvRetE",
                 "延时器占孔数":"dvDelay","切拉桥旗提前ms":"dvFlag"};
   const revTh={"打齿安全裕量ms":"thClash","气密最小裕量ms":"thSeal","初速警告阈值m/s":"thV",
                "管长匹配比例":"thBarrel","压气不足阈值":"thAir","最少保留啮合齿数":"thTeeth"};
-  for(const k in revDev)$(revDev[k]).value=(c["器件参数覆盖"]&&c["器件参数覆盖"][k]!=null)?c["器件参数覆盖"][k]:"";
-  for(const k in revTh)$(revTh[k]).value=(c["判定阈值覆盖"]&&c["判定阈值覆盖"][k]!=null)?c["判定阈值覆盖"][k]:"";
+  for(const k in revDev)$(revDev[k]).value=(c["器件参数覆盖"]&&c["器件参数覆盖"][k]!=null)?c["器件参数覆盖"][k]:(DEVDEF[k]!=null?DEVDEF[k]:"");
+  for(const k in revTh)$(revTh[k]).value=(c["判定阈值覆盖"]&&c["判定阈值覆盖"][k]!=null)?c["判定阈值覆盖"][k]:(THDEF[k]!=null?THDEF[k]:"");
   syncSliders();
 }
 
@@ -242,6 +258,18 @@ function syncSliders(){
   $("rpmS").value=Math.min(60000,Math.max(5000,$("rpm").value||30000));
   $("lfS").value=$("lf").value||0.8;
   $("blS").value=Math.min(600,Math.max(100,$("bl").value||210));
+}
+
+/* ---- 曲线模式锁定（选型号后：标称转速=该电机曲线值、负载系数=1，均不可修改） ---- */
+function syncMotorLock(){
+  const mm=$("motorModel").value, locked=!!mm;
+  if(locked){
+    $("rpm").value=$("motorModel").selectedOptions[0].getAttribute("data-rpm")||"";
+    $("lf").value="";
+  }
+  $("rpm").disabled=locked; $("rpmS").disabled=locked;
+  $("lf").disabled=locked;  $("lfS").disabled=locked;
+  $("lfS").value=$("lf").value||0.8;
 }
 
 /* ---- 实时模拟 ---- */
@@ -271,7 +299,7 @@ function render(d){
       o.return_margin_ms<0?"bad":(o.return_margin_ms<o.gear_clash_margin_ms?"warn":"")],
     ["气密裕量", o.seal_margin_ms.toFixed(2)+" ms",
       o.seal_margin_ms<0?"bad":(o.seal_margin_ms<o.air_seal_margin_ms?"warn":"")],
-    ["供蛋窗口", o.window_ms.toFixed(1)+" ms", o.window_ms<o.min_feed_ms?"warn":""],
+    ["供蛋窗口", o.window_ms.toFixed(1)+" ms", ""],
     ["压气指数", o.air_index.toFixed(2), o.air_index<o.low_air_index?"warn":""],
     ["活塞行程", o.stroke_mm.toFixed(1)+" mm（"+Math.round(o.stroke_ratio*100)+"%）", ""],
     ["有效推力 / 内管", o.useful_stroke_mm.toFixed(0)+" / "+o.barrel_length_mm.toFixed(0)+" mm",
@@ -334,7 +362,8 @@ function bind(){
     $(sId).addEventListener("input",()=>{$(nId).value=$(sId).value;schedule();});
     $(nId).addEventListener("input",()=>{syncSliders();schedule();});
   }
-  for(const id of ["motorModel","battCells","battCap","battC","modDelay","modFlag","ratio","cyl","spring","feedMode","fc","rc","bore","ball","feedMin",
+  $("motorModel").addEventListener("change",()=>{syncMotorLock();schedule();});
+  for(const id of ["battCells","battCap","battC","modDelay","modFlag","ratio","cyl","spring","feedMode","fc","rc","bore","ball",
                    "thClash","thSeal","thV","thBarrel","thAir","thTeeth",
                    "dvEff","dvMass","dvBore","dvDead","dvLeak","dvStroke","dvRetS","dvRetE"])
     $(id).addEventListener("input",schedule);
@@ -356,7 +385,11 @@ function bind(){
 }
 
 bind();
-fetch("/api/default").then(r=>r.json()).then(c=>{applyConfig(c);simulate();});
+fetch("/api/default").then(r=>r.json()).then(c=>{
+  DEVDEF=Object.assign({},c["器件参数覆盖"]||{});
+  THDEF=Object.assign({},c["判定阈值覆盖"]||{});
+  applyConfig(c);simulate();
+});
 </script>
 
 
