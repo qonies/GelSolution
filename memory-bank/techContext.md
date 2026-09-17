@@ -15,7 +15,7 @@
 ## 运行
 - `python run.py [-c configs/xxx.json]`（命令行报告）
 - `python webui.py [--port 8765] [--no-browser]`（本地网页界面，实时调参）
-- `python tests/test_sim.py`（引擎 189 项）/ `python tests/test_webapp.py`（接口 15 项）
+- `python tests/test_sim.py`（引擎 189 项）/ `python tests/test_webapp.py`（接口 21 项）
 
 ## 电机参数口径（v0.6.4 ✅用户确认）
 - 曲线模式（选 电机.型号）：负载系数固定 1、标称转速RPM 锁定为曲线空载值，
@@ -26,6 +26,8 @@
 - 后端：仅标准库 http.server（ThreadingHTTPServer）
   - GET / → gearbox_sim/web/index.html
   - GET /api/default → 默认配置
+  - GET /api/presets → 参数分区预设（configs/presets/<分区>/<名称>.json，
+    预设名称=文件名；v0.8.0 界面前 5 分区下拉用）
   - POST /api/simulate → 实时模拟（复用 load_config 中文校验；ConfigError→400）；
     单次 ~37ms（结构化结果与报告文本同源，report.render 复用已算结果）
 - 前端：单文件原生 HTML/JS/CSS，无框架无构建；150ms 防抖实时重算
@@ -33,7 +35,7 @@
 
 ## 版本控制
 - git 仓库（2026-09-08 初始化，Windows git）；项目版本号见
-  gearbox_sim/__init__.py（当前 0.7.2）；历史沿革见 activeContext.md
+  gearbox_sim/__init__.py（当前 0.8.0）；历史沿革见 activeContext.md
 
 ## 电机曲线库（motor.py MOTOR_CURVES，来源「电机性能曲线/」CHAOLI 11.1V 图）
 - 超力无刷4W8：48000 RPM / 473.70 mN·m / 3.7A / 222A

@@ -2,6 +2,7 @@
 """本地网页界面后端（仅标准库）：
   GET  /              → 界面页面（gearbox_sim/web/index.html）
   GET  /api/default   → 默认配置
+  GET  /api/presets   → 参数分区预设（configs/presets/<分区>/<名称>.json）
   POST /api/simulate  → 实时模拟（请求体=配置JSON，复用引擎与中文校验）
 """
 import argparse
@@ -51,6 +52,53 @@ DEFAULT_CONFIG = {
     "器件参数覆盖": _scalar_defaults(DEVICE_KEY_MAP, DeviceParams()),
     "判定阈值覆盖": _scalar_defaults(THRESHOLD_KEY_MAP, Thresholds()),
 }
+
+
+# ---- 参数分区预设（✅v0.8.0 用户需求：分区下拉选择预设参数文件或自定义） ----
+PRESETS_DIR = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), os.pardir, "configs", "presets"))
+PRESET_SECTIONS = ["电机", "齿轮", "电池", "气缸", "弹簧"]
+
+
+def _natural_key(name: str) -> list:
+    """自然排序键（数字段按数值比较）：M75 < M80 < … < M110。"""
+    parts, num = [], ""
+    for ch in name:
+        if ch.isdigit():
+            num += ch
+        else:
+            if num:
+                parts.append((0, int(num)))
+                num = ""
+            parts.append((1, ch))
+    if num:
+        parts.append((0, int(num)))
+    return parts
+
+
+def load_presets() -> dict:
+    """扫描 configs/presets/<分区>/<名称>.json → {分区: [{名称, 参数}, ...]}。
+    预设名称 = 文件名（去 .json），按自然排序；解析失败的文件保留条目并附
+    「错误」字段（前端以下拉禁用项提示），单文件损坏不影响其他预设。"""
+    out = {}
+    for sec in PRESET_SECTIONS:
+        items = []
+        sec_dir = os.path.join(PRESETS_DIR, sec)
+        if os.path.isdir(sec_dir):
+            files = [fn for fn in os.listdir(sec_dir) if fn.lower().endswith(".json")]
+            files.sort(key=lambda fn: _natural_key(fn))
+            for fn in files:
+                name = fn[:-5]
+                try:
+                    with open(os.path.join(sec_dir, fn), "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if not isinstance(data, dict):
+                        raise ValueError("预设内容必须是 JSON 对象")
+                    items.append({"名称": name, "参数": data})
+                except (OSError, ValueError) as e:
+                    items.append({"名称": name, "错误": "预设文件解析失败：%s" % e})
+        out[sec] = items
+    return out
 
 
 def simulate_payload(data: dict) -> dict:
@@ -137,6 +185,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(500, {"ok": False, "error": "界面文件缺失: web/index.html"})
         elif path == "/api/default":
             self._send(200, DEFAULT_CONFIG)
+        elif path == "/api/presets":
+            self._send(200, load_presets())
         else:
             self._send(404, {"ok": False, "error": "未找到: %s" % path})
 

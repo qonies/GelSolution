@@ -12,7 +12,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from gearbox_sim.webapp import simulate_payload, build_server, DEFAULT_CONFIG
-from gearbox_sim.params import ConfigError
+from gearbox_sim.params import ConfigError, load_config
 
 FAILS = []
 
@@ -94,6 +94,65 @@ try:
 except urllib.error.HTTPError as e:
     body = json.loads(e.read().decode("utf-8"))
     check("无效配置→400", e.code == 400 and "齿轮比" in body["error"], body.get("error", ""))
+
+# ---- 参数分区预设（GET /api/presets，configs/presets/<分区>/<名称>.json）----
+pr = json.loads(urllib.request.urlopen(base + "/api/presets", timeout=5).read().decode("utf-8"))
+check("GET /api/presets 五个分区", set(pr.keys()) == {"电机", "齿轮", "电池", "气缸", "弹簧"})
+check("预设均有名称且参数为对象",
+      all(isinstance(p.get("参数"), dict) and p.get("名称")
+          for sec in pr.values() for p in sec),
+      str({k: len(v) for k, v in pr.items()}))
+check("电机预设含 4 款曲线电机",
+      {"超力无刷4W8", "超力无刷3W9", "超力有刷3W5", "超力有刷3W3"}
+      <= {p["名称"] for p in pr["电机"]})
+check("弹簧预设自然排序（M75 < M100）",
+      [p["名称"] for p in pr["弹簧"]][:3] == ["M75", "M80", "M85"])
+
+# 全部预设并入默认配置须可解析（空预设如「不启用」跳过；电池预设须配曲线模式电机）
+merge_ok, bad, merged = True, "", 0
+for sec, items in pr.items():
+    for p in items:
+        if p.get("错误"):
+            merge_ok, bad = False, "%s/%s 解析失败" % (sec, p["名称"])
+            break
+        m = p["参数"]
+        if not m:
+            continue
+        cfg = json.loads(json.dumps(DEFAULT_CONFIG))
+        if sec == "电机":
+            cfg["电机"] = dict(m)
+        elif sec == "电池":
+            cfg["电机"] = {"型号": "超力无刷4W8"}
+            cfg["电池"] = dict(m)
+        elif sec == "齿轮":
+            cfg["齿轮比"] = m["齿轮比"]
+            cfg["切齿"] = {"前切齿数": m.get("前切齿数", 0), "后切齿数": m.get("后切齿数", 0)}
+            if "天梯齿数" in m:
+                cfg["器件参数覆盖"]["天梯齿数"] = m["天梯齿数"]
+        elif sec == "气缸":
+            cfg["气缸类型"] = m["气缸类型"]
+            for k in ("气缸内径mm", "气缸长度mm", "气缸余隙容积cm3", "开孔段保留系数"):
+                if k in m:
+                    cfg["器件参数覆盖"][k] = m[k]
+        elif sec == "弹簧":
+            cfg["弹簧"] = m["弹簧"]
+            for k in ("弹簧预压mm", "活塞满行程mm", "活塞质量g", "撞击回弹系数"):
+                if k in m:
+                    cfg["器件参数覆盖"][k] = m[k]
+        try:
+            load_config(cfg)
+            merged += 1
+        except ConfigError as e:
+            merge_ok, bad = False, "%s/%s: %s" % (sec, p["名称"], e)
+            break
+check("全部预设并入配置可解析（%d 套）" % merged, merge_ok, bad)
+
+# 预设端到端：4W8 电机 + 3S 电池预设合并模拟（曲线模式负载转速 > 0）
+cfg = json.loads(json.dumps(DEFAULT_CONFIG))
+cfg["电机"] = {"型号": "超力无刷4W8"}
+cfg["电池"] = {"电芯数": 3, "容量mAh": 1400, "放电倍率": 30}
+p3 = simulate_payload(cfg)
+check("预设合并端到端模拟 ok", p3["ok"] and p3["overview"]["loaded_rpm"] > 0)
 
 server.shutdown()
 print()

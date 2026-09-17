@@ -27,6 +27,10 @@ main{display:flex;gap:14px;padding:14px;align-items:flex-start}
 select,input[type=number],textarea{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;background:#fff;color:var(--txt)}
 input[type=range]{width:100%;accent-color:var(--accent)}
 .duo{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.psec{border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin-bottom:10px;background:#fcfdfe}
+.psec-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.psec-h b{font-size:13px;white-space:nowrap}
+.psel{width:auto;max-width:158px;min-width:96px;font-size:12px;padding:4px 6px}
 details{border-top:1px dashed var(--line);padding-top:8px;margin-top:8px}
 details summary{cursor:pointer;font-size:13px;color:var(--accent)}
 table{width:100%;border-collapse:collapse;font-size:13px}
@@ -57,86 +61,114 @@ tr.hl td{background:#eaf1ff}
 <header><h1>水弹波箱运作数据模拟</h1><span>本地网页界面 · 实时数据模拟 · 无动画 · 通用二号波</span></header>
 <main>
 <section id="params">
-  <div class="group"><label>电机型号（选型后按性能曲线计算负载转速；标称转速与负载系数随之锁定）</label>
-    <select id="motorModel">
-      <option value="">固定转速（手动输入下方转速）</option>
-      <option value="超力无刷4W8" data-rpm="48000">超力无刷 4W8（空载 48000 RPM / 11.1V）</option>
-      <option value="超力无刷3W9" data-rpm="39000">超力无刷 3W9（空载 39000 RPM / 11.1V）</option>
-      <option value="超力有刷3W5" data-rpm="35500">超力有刷 3W5（空载 35500 RPM / 11.1V）</option>
-      <option value="超力有刷3W3" data-rpm="32800">超力有刷 3W3（空载 32800 RPM / 11.1V）</option>
-    </select></div>
-  <div class="group"><label>电机标称转速 RPM（仅固定转速模式可改；选型号后锁定为其曲线标称转速）</label>
-    <div class="row"><input type="range" id="rpmS" min="5000" max="60000" step="500" style="flex:1">
-      <input type="number" id="rpm" min="1000" max="100000" step="100" style="width:92px"></div></div>
-  <div class="group"><label>负载系数（仅固定转速模式可改，默认 0.8；选型号后固定为 1）</label>
-    <div class="row"><input type="range" id="lfS" min="0.3" max="1" step="0.05" style="flex:1">
-      <input type="number" id="lf" min="0.1" max="1" step="0.05" style="width:70px" placeholder="自动"></div></div>
-  <div class="group duo">
-    <div><label><input type="checkbox" id="modDelay" style="width:auto;vertical-align:middle"> 安装延时器（加宽供蛋窗口）</label></div>
-    <div><label><input type="checkbox" id="modFlag" style="width:auto;vertical-align:middle"> 切拉桥旗（切S尾：推嘴更早更快恢复）</label></div>
+  <div class="psec">
+    <div class="psec-h"><b>电机参数</b><select id="preset_电机" class="psel"><option value="">自定义</option></select></div>
+    <div class="group"><label>电机型号（选型后按性能曲线计算负载转速；标称转速与负载系数随之锁定）</label>
+      <select id="motorModel">
+        <option value="">固定转速（手动输入下方转速）</option>
+        <option value="超力无刷4W8" data-rpm="48000">超力无刷 4W8（空载 48000 RPM / 11.1V）</option>
+        <option value="超力无刷3W9" data-rpm="39000">超力无刷 3W9（空载 39000 RPM / 11.1V）</option>
+        <option value="超力有刷3W5" data-rpm="35500">超力有刷 3W5（空载 35500 RPM / 11.1V）</option>
+        <option value="超力有刷3W3" data-rpm="32800">超力有刷 3W3（空载 32800 RPM / 11.1V）</option>
+      </select></div>
+    <div class="group"><label>电机标称转速 RPM（仅固定转速模式可改；选型号后锁定为其曲线标称转速）</label>
+      <div class="row"><input type="range" id="rpmS" min="5000" max="60000" step="500" style="flex:1">
+        <input type="number" id="rpm" min="1000" max="100000" step="100" style="width:92px"></div></div>
+    <div class="group"><label>负载系数（仅固定转速模式可改，默认 0.8；选型号后固定为 1）</label>
+      <div class="row"><input type="range" id="lfS" min="0.3" max="1" step="0.05" style="flex:1">
+        <input type="number" id="lf" min="0.1" max="1" step="0.05" style="width:70px" placeholder="自动"></div></div>
   </div>
-  <div class="group duo">
-    <div><label>电池（选配，须先选电机型号）</label><select id="battCells">
+
+  <div class="psec">
+    <div class="psec-h"><b>齿轮参数</b><select id="preset_齿轮" class="psel"><option value="">自定义</option></select></div>
+    <div class="group duo">
+      <div><label>齿轮比</label><select id="ratio">
+        <option selected>13:1</option><option>16:1</option><option>18:1</option></select></div>
+      <div><label>天梯齿数（原装 13.5；半齿计整齿，11.5→12）</label><input type="number" id="dvTappet" step="0.5"></div>
+    </div>
+    <div class="group duo">
+      <div><label>前切齿数（切蛋糕齿）</label><input type="number" id="fc" min="0" max="6" step="1" value="0"></div>
+      <div><label>后切齿数</label><input type="number" id="rc" min="0" max="6" step="1" value="0"></div>
+    </div>
+  </div>
+
+  <div class="psec">
+    <div class="psec-h"><b>电池参数</b><select id="preset_电池" class="psel"><option value="">自定义</option></select></div>
+    <div class="group"><label>电池（选配，须先在电机参数选择型号）</label><select id="battCells">
       <option value="">不启用</option><option value="2">2S（满电 8.4V）</option>
       <option value="3">3S（满电 12.6V）</option><option value="4">4S（满电 16.8V）</option>
       <option value="6">6S（满电 25.2V）</option></select></div>
-    <div><label>容量 mAh</label><input type="number" id="battCap" step="100" placeholder="1400"></div>
+    <div class="group duo">
+      <div><label>容量 mAh</label><input type="number" id="battCap" step="100" placeholder="1400"></div>
+      <div><label>放电倍率 C（缺省 30C）</label><input type="number" id="battC" step="5" placeholder="30"></div>
+    </div>
   </div>
-  <div class="group"><label>放电倍率 C（选配电池时生效，缺省 30C）</label>
-    <input type="number" id="battC" step="5" placeholder="30"></div>
-  <div class="group duo">
-    <div><label>齿轮比</label><select id="ratio">
-      <option selected>13:1</option><option>16:1</option><option>18:1</option></select></div>
-    <div><label>气缸类型</label><select id="cyl">
+  <div class="psec">
+    <div class="psec-h"><b>气缸参数</b><select id="preset_气缸" class="psel"><option value="">自定义</option></select></div>
+    <div class="group"><label>气缸类型（开孔位置，以满行程标定、固定于缸体）</label><select id="cyl">
       <option selected>50%</option><option>60%</option><option>70%</option><option>80%</option><option>100%</option></select></div>
+    <div class="group duo">
+      <div><label>气缸内径 mm（✅实测 23.8）</label><input type="number" id="dvBore" step="0.1"></div>
+      <div><label>气缸长度 mm（✅实测 72.5）</label><input type="number" id="dvCylLen" step="1"></div>
+    </div>
+    <div class="group duo">
+      <div><label>气缸余隙容积 cm³</label><input type="number" id="dvDead" step="0.1"></div>
+      <div><label>开孔段保留系数（0=全漏，1=不漏）</label><input type="number" id="dvPortRet" step="0.05"></div>
+    </div>
   </div>
-  <div class="group duo">
-    <div><label>弹簧硬度</label><select id="spring">
-      <option>M75</option><option>M80</option><option>M85</option><option selected>M90</option>
-      <option>M95</option><option>M100</option><option>M110</option></select></div>
-    <div><label>供蛋方式</label><select id="feedMode">
-      <option value="普通波轮" selected>普通波轮（≤30发/秒）</option><option value="高级波轮">高级波轮（≤60发/秒）</option><option value="压力弹匣">压力弹匣（≤80发/秒）</option></select></div>
+
+  <div class="psec">
+    <div class="psec-h"><b>弹簧参数</b><select id="preset_弹簧" class="psel"><option value="">自定义</option></select></div>
+    <div class="group duo">
+      <div><label>弹簧硬度</label><select id="spring">
+        <option>M75</option><option>M80</option><option>M85</option><option selected>M90</option>
+        <option>M95</option><option>M100</option><option>M110</option></select></div>
+      <div><label>弹簧预压 mm</label><input type="number" id="dvPreload" step="0.5"></div>
+    </div>
+    <div class="group duo">
+      <div><label>活塞满行程 mm（✅实测 60.5）</label><input type="number" id="dvStroke" step="1"></div>
+      <div><label>活塞质量 g</label><input type="number" id="dvPistonMass" step="0.5"></div>
+    </div>
+    <div class="group"><label>撞击回弹系数（天梯撞缸头反弹速度比，回位稳定模型）</label>
+      <input type="number" id="dvResti" step="0.05"></div>
   </div>
-  <div class="group duo">
-    <div><label>前切齿数（切蛋糕齿）</label><input type="number" id="fc" min="0" max="6" step="1" value="0"></div>
-    <div><label>后切齿数</label><input type="number" id="rc" min="0" max="6" step="1" value="0"></div>
+
+  <div class="psec">
+    <div class="psec-h"><b>其他参数</b></div>
+    <div class="group duo">
+      <div><label>供蛋方式</label><select id="feedMode">
+        <option value="普通波轮" selected>普通波轮（≤30发/秒）</option><option value="高级波轮">高级波轮（≤60发/秒）</option><option value="压力弹匣">压力弹匣（≤80发/秒）</option></select></div>
+      <div><label>内管管径</label><select id="bore">
+        <option value="7.3">7.3</option><option selected value="7.5">7.5</option></select></div>
+    </div>
+    <div class="group"><label>内管长度 mm</label>
+      <div class="row"><input type="range" id="blS" min="100" max="600" step="10" style="flex:1">
+        <input type="number" id="bl" min="20" max="800" step="5" style="width:92px"></div></div>
+    <div class="group duo">
+      <div><label>水弹直径（不得大于管径）</label><select id="ball">
+        <option selected value="7.2">7.2</option><option value="7.3">7.3</option></select></div>
+      <div><label><input type="checkbox" id="modDelay" style="width:auto;vertical-align:middle"> 安装延时器（加宽供蛋窗口）</label></div>
+    </div>
+    <div class="group"><label><input type="checkbox" id="modFlag" style="width:auto;vertical-align:middle"> 切拉桥旗（切S尾：推嘴更早更快恢复，需强拉桥簧）</label></div>
+    <details><summary>判定阈值（已预填系统默认值，可参考或修改）</summary>
+      <div class="group duo"><div><label>打齿安全裕量 ms</label><input type="number" id="thClash" step="0.1"></div>
+        <div><label>气密最小裕量 ms</label><input type="number" id="thSeal" step="0.1"></div></div>
+      <div class="group duo"><div><label>初速警告阈值 m/s</label><input type="number" id="thV" step="1"></div>
+        <div><label>管长匹配比例</label><input type="number" id="thBarrel" step="0.05"></div></div>
+      <div class="group duo"><div><label>压气不足阈值</label><input type="number" id="thAir" step="0.05"></div>
+        <div><label>最少保留啮合齿数</label><input type="number" id="thTeeth" step="1"></div></div>
+    </details>
+    <details><summary>其他器件参数（已预填系统默认值，可修改 / 实测校准）</summary>
+      <div style="font-size:12px;color:var(--sub);margin-bottom:6px">以下为通用二号波默认参数（含【估算】值，报告尾部附估算清单）；气缸/弹簧/活塞相关器件参数已移至上方对应分区。清空某项 = 恢复该系统默认。</div>
+      <div class="group duo"><div><label>气动效率</label><input type="number" id="dvEff" step="0.01"></div>
+        <div><label>水弹质量 g</label><input type="number" id="dvMass" step="0.01"></div></div>
+      <div class="group duo"><div><label>泄气损失系数</label><input type="number" id="dvLeak" step="0.1"></div>
+        <div><label>推嘴回位起始角 °</label><input type="number" id="dvRetS" step="1"></div></div>
+      <div class="group duo"><div><label>推嘴回位完成角 °</label><input type="number" id="dvRetE" step="1"></div>
+        <div><label>延时器占孔数（1孔=36°，装延时器=2孔）</label><input type="number" id="dvDelay" step="0.5"></div></div>
+      <div class="group duo"><div><label>切拉桥旗提前 ms</label><input type="number" id="dvFlag" step="0.5"></div><div></div></div>
+    </details>
   </div>
-  <div class="group"><label>内管长度 mm</label>
-    <div class="row"><input type="range" id="blS" min="100" max="600" step="10" style="flex:1">
-      <input type="number" id="bl" min="20" max="800" step="5" style="width:92px"></div></div>
-  <div class="group duo">
-    <div><label>内管管径</label><select id="bore">
-      <option value="7.3">7.3</option><option selected value="7.5">7.5</option></select></div>
-    <div><label>水弹直径</label><select id="ball">
-      <option selected value="7.2">7.2</option><option value="7.3">7.3</option></select></div>
-  </div>
-  <details><summary>判定阈值（已预填系统默认值，可参考或修改）</summary>
-    <div class="group duo"><div><label>打齿安全裕量 ms</label><input type="number" id="thClash" step="0.1"></div>
-      <div><label>气密最小裕量 ms</label><input type="number" id="thSeal" step="0.1"></div></div>
-    <div class="group duo"><div><label>初速警告阈值 m/s</label><input type="number" id="thV" step="1"></div>
-      <div><label>管长匹配比例</label><input type="number" id="thBarrel" step="0.05"></div></div>
-    <div class="group duo"><div><label>压气不足阈值</label><input type="number" id="thAir" step="0.05"></div>
-      <div><label>最少保留啮合齿数</label><input type="number" id="thTeeth" step="1"></div></div>
-  </details>
-  <details><summary>器件参数覆盖（已预填系统默认值，可修改 / 实测校准）</summary>
-    <div style="font-size:12px;color:var(--sub);margin-bottom:6px">以下为通用二号波默认参数（含【估算】值，报告尾部附估算清单）；可直接参考，实测后修改将覆盖默认。清空某项 = 恢复该系统默认。</div>
-    <div class="group duo"><div><label>气动效率</label><input type="number" id="dvEff" step="0.01"></div>
-      <div><label>水弹质量 g</label><input type="number" id="dvMass" step="0.01"></div></div>
-    <div class="group duo"><div><label>气缸内径 mm</label><input type="number" id="dvBore" step="0.1"></div>
-      <div><label>气缸长度 mm</label><input type="number" id="dvCylLen" step="1"></div></div>
-    <div class="group duo"><div><label>气缸余隙容积 cm³</label><input type="number" id="dvDead" step="0.1"></div>
-      <div><label>弹簧预压 mm</label><input type="number" id="dvPreload" step="0.5"></div></div>
-    <div class="group duo"><div><label>泄气损失系数</label><input type="number" id="dvLeak" step="0.1"></div>
-      <div><label>活塞满行程 mm</label><input type="number" id="dvStroke" step="1"></div></div>
-    <div class="group duo"><div><label>天梯齿数（原装 13.5；半齿计整齿，11.5→12）</label><input type="number" id="dvTappet" step="0.5"></div>
-      <div><label>活塞质量 g</label><input type="number" id="dvPistonMass" step="0.5"></div></div>
-    <div class="group duo"><div><label>开孔段保留系数（0=全漏，1=不漏）</label><input type="number" id="dvPortRet" step="0.05"></div>
-      <div><label>撞击回弹系数</label><input type="number" id="dvResti" step="0.05"></div></div>
-    <div class="group duo"><div><label>推嘴回位起始角 °</label><input type="number" id="dvRetS" step="1"></div>
-      <div><label>推嘴回位完成角 °</label><input type="number" id="dvRetE" step="1"></div></div>
-    <div class="group duo"><div><label>延时器占孔数（1孔=36°，装延时器=2孔）</label><input type="number" id="dvDelay" step="0.5"></div>
-      <div><label>切拉桥旗提前 ms</label><input type="number" id="dvFlag" step="0.5"></div></div>
-  </details>
   <div class="buttons">
     <button class="primary" id="btnSim">立即模拟</button>
     <button id="btnExport">导出JSON</button>
@@ -251,6 +283,7 @@ function applyConfig(c){
                "管长匹配比例":"thBarrel","压气不足阈值":"thAir","最少保留啮合齿数":"thTeeth"};
   for(const k in revDev)$(revDev[k]).value=(c["器件参数覆盖"]&&c["器件参数覆盖"][k]!=null)?c["器件参数覆盖"][k]:(DEVDEF[k]!=null?DEVDEF[k]:"");
   for(const k in revTh)$(revTh[k]).value=(c["判定阈值覆盖"]&&c["判定阈值覆盖"][k]!=null)?c["判定阈值覆盖"][k]:(THDEF[k]!=null?THDEF[k]:"");
+  for(const sec of SECS)$("preset_"+sec).value="";   // 导入/载入配置 → 分区预设转为「自定义」
   syncSliders();
 }
 
@@ -355,6 +388,58 @@ function render(d){
   $("report").value=d.report_text;
 }
 
+/* ---- 参数分区预设（configs/presets/<分区>/<名称>.json，GET /api/presets 下发；
+   选择预设 = 整区载入（未列出的参数恢复默认），手动修改任意输入自动转「自定义」） ---- */
+const SECS = ["电机", "齿轮", "电池", "气缸", "弹簧"];
+let PRESETS = {};
+function devDef(k){return DEVDEF[k]!=null?DEVDEF[k]:"";}
+function applyPreset(sec,name){
+  const p=(PRESETS[sec]||[]).find(x=>x["名称"]===name);
+  if(!p||p["错误"])return;
+  const m=p["参数"]||{};
+  if(sec==="电机"){
+    if(m["型号"]){$("motorModel").value=m["型号"];}
+    else{
+      $("motorModel").value="";
+      $("rpm").value=(m["标称转速RPM"]!=null)?m["标称转速RPM"]:30000;
+      $("lf").value=(m["负载系数"]!=null)?m["负载系数"]:"";
+    }
+    syncMotorLock();
+  }else if(sec==="齿轮"){
+    $("ratio").value=m["齿轮比"]||"13:1";
+    $("fc").value=(m["前切齿数"]!=null)?m["前切齿数"]:0;
+    $("rc").value=(m["后切齿数"]!=null)?m["后切齿数"]:0;
+    $("dvTappet").value=(m["天梯齿数"]!=null)?m["天梯齿数"]:devDef("天梯齿数");
+  }else if(sec==="电池"){
+    $("battCells").value=(m["电芯数"]!=null)?String(m["电芯数"]):"";
+    $("battCap").value=(m["容量mAh"]!=null)?m["容量mAh"]:"";
+    $("battC").value=(m["放电倍率"]!=null)?m["放电倍率"]:"";
+  }else if(sec==="气缸"){
+    $("cyl").value=m["气缸类型"]||"50%";
+    $("dvBore").value=(m["气缸内径mm"]!=null)?m["气缸内径mm"]:devDef("气缸内径mm");
+    $("dvCylLen").value=(m["气缸长度mm"]!=null)?m["气缸长度mm"]:devDef("气缸长度mm");
+    $("dvDead").value=(m["气缸余隙容积cm3"]!=null)?m["气缸余隙容积cm3"]:devDef("气缸余隙容积cm3");
+    $("dvPortRet").value=(m["开孔段保留系数"]!=null)?m["开孔段保留系数"]:devDef("开孔段保留系数");
+  }else if(sec==="弹簧"){
+    $("spring").value=m["弹簧"]||"M90";
+    $("dvPreload").value=(m["弹簧预压mm"]!=null)?m["弹簧预压mm"]:devDef("弹簧预压mm");
+    $("dvStroke").value=(m["活塞满行程mm"]!=null)?m["活塞满行程mm"]:devDef("活塞满行程mm");
+    $("dvPistonMass").value=(m["活塞质量g"]!=null)?m["活塞质量g"]:devDef("活塞质量g");
+    $("dvResti").value=(m["撞击回弹系数"]!=null)?m["撞击回弹系数"]:devDef("撞击回弹系数");
+  }
+  syncSliders();schedule();
+}
+function fillPresetSelects(){
+  for(const sec of SECS){
+    const sel=$("preset_"+sec), cur=sel.value;
+    sel.innerHTML='<option value="">自定义</option>'+(PRESETS[sec]||[]).map(p=>
+      '<option value="'+esc(p["名称"])+'"'+(p["错误"]?" disabled":"")+'>'+
+      esc(p["名称"])+(p["错误"]?"（文件错误）":"")+"</option>").join("");
+    if(cur)sel.value=cur;
+  }
+}
+function markCustom(sec){$("preset_"+sec).value="";}
+
 /* ---- 事件绑定与初始化 ---- */
 function bind(){
   const pairs=[["rpmS","rpm"],["lfS","lf"],["blS","bl"]];
@@ -365,7 +450,8 @@ function bind(){
   $("motorModel").addEventListener("change",()=>{syncMotorLock();schedule();});
   for(const id of ["battCells","battCap","battC","modDelay","modFlag","ratio","cyl","spring","feedMode","fc","rc","bore","ball",
                    "thClash","thSeal","thV","thBarrel","thAir","thTeeth",
-                   "dvEff","dvMass","dvBore","dvDead","dvLeak","dvStroke","dvRetS","dvRetE"])
+                   "dvEff","dvMass","dvBore","dvCylLen","dvDead","dvPortRet","dvLeak","dvStroke",
+                   "dvTappet","dvPistonMass","dvPreload","dvResti","dvRetS","dvRetE","dvDelay","dvFlag"])
     $(id).addEventListener("input",schedule);
   $("btnSim").addEventListener("click",simulate);
   $("btnExport").addEventListener("click",()=>{
@@ -382,9 +468,23 @@ function bind(){
   $("btnCopy").addEventListener("click",()=>{
     navigator.clipboard.writeText($("report").value).then(()=>{
       $("btnCopy").textContent="已复制";setTimeout(()=>$("btnCopy").textContent="复制",1200);});});
+  for(const sec of SECS){
+    $("preset_"+sec).addEventListener("change",()=>{
+      const v=$("preset_"+sec).value;
+      if(v)applyPreset(sec,v);
+    });
+  }
+  const SEC_INPUTS={"电机":["motorModel","rpm","rpmS","lf","lfS"],
+                    "齿轮":["ratio","fc","rc","dvTappet"],
+                    "电池":["battCells","battCap","battC"],
+                    "气缸":["cyl","dvBore","dvCylLen","dvDead","dvPortRet"],
+                    "弹簧":["spring","dvPreload","dvStroke","dvPistonMass","dvResti"]};
+  for(const sec in SEC_INPUTS)for(const id of SEC_INPUTS[sec])
+    $(id).addEventListener("input",()=>markCustom(sec));
 }
 
 bind();
+fetch("/api/presets").then(r=>r.json()).then(d=>{PRESETS=d||{};fillPresetSelects();}).catch(()=>{});
 fetch("/api/default").then(r=>r.json()).then(c=>{
   DEVDEF=Object.assign({},c["器件参数覆盖"]||{});
   THDEF=Object.assign({},c["判定阈值覆盖"]||{});
