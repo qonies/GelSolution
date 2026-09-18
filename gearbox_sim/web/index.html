@@ -31,6 +31,11 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .psec-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
 .psec-h b{font-size:13px;white-space:nowrap}
 .psel{width:auto;max-width:158px;min-width:96px;font-size:12px;padding:4px 6px}
+.psec-h{cursor:pointer;user-select:none}
+.psec-h b::before{content:"▾";font-size:10px;color:var(--sub);margin-right:4px}
+.psec.collapsed .psec-h b::before{content:"▸"}
+.psec.collapsed > :not(.psec-h){display:none}
+.psec.collapsed .psec-h{margin-bottom:0}
 details{border-top:1px dashed var(--line);padding-top:8px;margin-top:8px}
 details summary{cursor:pointer;font-size:13px;color:var(--accent)}
 table{width:100%;border-collapse:collapse;font-size:13px}
@@ -439,6 +444,25 @@ function fillPresetSelects(){
   }
 }
 function markCustom(sec){$("preset_"+sec).value="";}
+/* ---- 分区折叠/展开（✅v0.8.1：点击分区头部切换；预设下拉点击不触发；
+   状态按分区记忆于 localStorage，刷新保持） ---- */
+function initCollapse(){
+  let saved={};
+  try{saved=JSON.parse(localStorage.getItem("psec_collapsed")||"{}");}catch(e){saved={};}
+  document.querySelectorAll("#params .psec").forEach(sec=>{
+    const h=sec.querySelector(".psec-h");
+    if(!h)return;
+    const b=h.querySelector("b");
+    const title=b?b.textContent:"";
+    if(saved[title])sec.classList.add("collapsed");
+    h.addEventListener("click",e=>{
+      if(e.target.closest("select")||e.target.tagName==="OPTION")return;
+      sec.classList.toggle("collapsed");
+      saved[title]=sec.classList.contains("collapsed");
+      try{localStorage.setItem("psec_collapsed",JSON.stringify(saved));}catch(err){}
+    });
+  });
+}
 
 /* ---- 事件绑定与初始化 ---- */
 function bind(){
@@ -481,6 +505,7 @@ function bind(){
                     "弹簧":["spring","dvPreload","dvStroke","dvPistonMass","dvResti"]};
   for(const sec in SEC_INPUTS)for(const id of SEC_INPUTS[sec])
     $(id).addEventListener("input",()=>markCustom(sec));
+  initCollapse();
 }
 
 bind();

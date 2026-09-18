@@ -35,7 +35,7 @@
 
 ## 版本控制
 - git 仓库（2026-09-08 初始化，Windows git）；项目版本号见
-  gearbox_sim/__init__.py（当前 0.8.0）；历史沿革见 activeContext.md
+  gearbox_sim/__init__.py（当前 0.8.1）；历史沿革见 activeContext.md
 
 ## 电机曲线库（motor.py MOTOR_CURVES，来源「电机性能曲线/」CHAOLI 11.1V 图）
 - 超力无刷4W8：48000 RPM / 473.70 mN·m / 3.7A / 222A
