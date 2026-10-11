@@ -208,6 +208,18 @@ def load_config(data: dict) -> SimConfig:
     if errors:
         raise ConfigError("；".join(errors))
 
+    # 表类型覆盖为整体替换（✅v0.8.2 校验）：替换后必须仍包含当前所选规格，
+    # 否则计算层会 KeyError 崩溃——这里给出中文错误
+    if cfg.spring not in cfg.device.spring_stiffness:
+        raise ConfigError("弹簧刚度表 缺少当前弹簧 %s 的刚度值"
+                          "（表为整体替换，请包含全部 M 值键）" % cfg.spring)
+    if cfg.cylinder not in cfg.device.cylinder_factor:
+        raise ConfigError("气缸系数表 缺少当前气缸类型 %s 的系数"
+                          "（表为整体替换，请包含全部缸型键）" % cfg.cylinder)
+    if cfg.feed_mode not in cfg.device.feed_max_rps:
+        raise ConfigError("最大供蛋速率表 缺少当前供蛋方式「%s」的速率"
+                          "（表为整体替换，请包含全部方式键）" % cfg.feed_mode)
+
     # 天梯齿数（v0.6.8）：必须是 4~24 的数字（允许半齿，如 11.5 / 13.5，
     # 半齿计整齿：13.5 → 14、11.5 → 12）
     tappet = cfg.device.tappet_teeth

@@ -39,14 +39,17 @@ class Timeline:
     stroke_mm: float        # 活塞拉控行程
     stroke_ratio: float     # 行程 / 满行程
     pickup_ms: float        # 本循环活塞拾取时刻
-    retract_start_ms: float  # 推嘴开始缩回时刻（=拾取+1齿距，凸轮几何锚定，弧段换算）
+    retract_deg: float      # 推嘴开始缩回有效角（含延时器提前度数钳制）
+    retract_start_ms: float  # 推嘴开始缩回时刻（=拾取+1齿距−提前度数，弧段换算）
     release_ms: float       # 活塞释放时刻
+    window_start_deg: float  # 供蛋窗口开始有效角（含延时器提前度数钳制）
     window_start_ms: float  # 供蛋窗口开始（推嘴完全缩回）
     window_end_ms: float    # 供蛋窗口结束（推嘴开始回位）
-    window_end_deg: float   # 回位起始有效角（含延时器占孔角）
+    window_end_deg: float   # 回位起始有效角（含延时器延时度数）
     seat_ms: float          # 推嘴回位完成（气密就位）
-    seat_deg: float         # 回位完成有效角（含延时器占孔角）
-    delay_ms: float         # 延时器推迟量 ms（角度级几何换算；未装为 0）
+    seat_deg: float         # 回位完成有效角（含延时器延时度数）
+    delay_ms: float         # 延时器推迟量 ms（回位推迟；未装为 0）
+    advance_ms: float       # 延时器提前量 ms（缩回提前；未装为 0）
     next_pickup_ms: float   # 下一循环活塞拾取时刻
     next_retract_ms: float  # 下一循环推嘴开始缩回时刻（前切时可能早于拾取）
 
@@ -85,7 +88,8 @@ def build_timeline(cfg: SimConfig, dev: DeviceParams) -> Timeline:
             batt_sag = batt.sag
             batt_shots = batt.shots
     pitch = dev.sector_pitch_deg
-    full_arc = dev.sector_full_teeth * pitch          # 满齿弧（默认 16×11.25=180°）
+    full_arc = dev.sector_full_teeth * pitch          # 满拉弧（默认 16×12=192°，
+                                                      # ✅v3.9 每齿 12°：15 齿距占 180°）
     pickup_deg = cfg.front_cut * pitch                # 前切 → 拾取推迟
     release_deg = full_arc - cfg.rear_cut * pitch     # 后切 → 提前释放
     # 蛋糕齿实际可咬合的天梯齿数（天梯齿数，半齿计整齿）：咬合 = min(扇齿满
@@ -119,25 +123,33 @@ def build_timeline(cfg: SimConfig, dev: DeviceParams) -> Timeline:
     period_ms = ((360.0 - release_deg + pickup_deg) * msdeg_f
                  + (release_deg - pickup_deg) * msdeg_l)
 
-    retract_start_ms = _t(dev.cam_retract_start_deg)
-    window_start_ms = _t(dev.cam_retract_end_deg)
-
-    # 改装件：延时器推迟推嘴回位（角度级几何：拉桥柱一圈 10 孔、每孔 36°，
-    #         延时器使柱子加粗一倍、额外占 1 孔 → 回位起始/完成角 +占孔角；
-    #         推迟量按所在弧段转速换算，固定模式下 = 周期 × 占孔数/总孔数）；
+    # 改装件时序（✅v4.0 角度参数模型）：延时器以两个直接角度参数描述——
+    #         提前度数 = 比原拉桥柱更早接触拉桥旗的扇齿转角 → 推嘴开始缩回与
+    #         完全缩回（供蛋窗口开始）提前该角度（钳制 ≥0°，不越到拾取之前）；
+    #         延时度数 = 比原拉桥柱更晚离开拉桥旗的扇齿转角 → 推嘴回位起始/完成
+    #         推迟该角度（供蛋窗口加宽、气密就位更晚）。提前/推迟量按所在弧段
+    #         转速换算 ms。旧「延时器占孔数」几何模型弃用（36°/孔，默认延时
+    #         36° = 原 1 孔口径，装延时器默认行为与旧模型等价；旧键接受但忽略）。
     #         切拉桥旗使推嘴回位完成提前（气密更早就位，供蛋窗口不变）
-    delay_deg = (dev.delay_device_holes / dev.cam_hole_count * 360.0
-                 if cfg.install_delay else 0.0)
-    window_end_deg = min(dev.cam_return_start_deg + delay_deg, 359.999)
-    seat_deg = min(dev.cam_return_end_deg + delay_deg, 359.999)
+    adv_deg = (dev.delay_advance_deg if cfg.install_delay else 0.0)
+    hold_deg = (dev.delay_hold_deg if cfg.install_delay else 0.0)
+    retract_deg = max(dev.cam_retract_start_deg - adv_deg, 0.0)
+    wstart_deg = max(dev.cam_retract_end_deg - adv_deg, 0.0)
+    retract_start_ms = _t(retract_deg)
+    window_start_ms = _t(wstart_deg)
+
+    window_end_deg = min(dev.cam_return_start_deg + hold_deg, 359.999)
+    seat_deg = min(dev.cam_return_end_deg + hold_deg, 359.999)
     window_end_ms = _t(window_end_deg)
     flag_ms = dev.flag_cut_advance_ms if cfg.cut_flag else 0.0
     seat_ms = max(_t(seat_deg) - flag_ms, window_end_ms)
     delay_ms = (_t(seat_deg) - _t(dev.cam_return_end_deg)
                 if cfg.install_delay else 0.0)
+    advance_ms = (_t(dev.cam_retract_start_deg) - _t(retract_deg)
+                  if cfg.install_delay else 0.0)
 
     next_pickup_ms = period_ms + pickup_ms
-    # 下一循环推嘴开始缩回：缩回起点角固定于扇齿（11.25°），前切 n≥2 时
+    # 下一循环推嘴开始缩回：缩回起点角固定于扇齿（12°），前切 n≥2 时
     # 下一循环缩回早于下一循环拾取 → 单循环时序终点取下一循环首个事件
     next_retract_ms = period_ms + retract_start_ms
 
@@ -151,9 +163,11 @@ def build_timeline(cfg: SimConfig, dev: DeviceParams) -> Timeline:
         pickup_deg=pickup_deg, release_deg=release_deg, remain_teeth=remain,
         stroke_mm=stroke_mm, stroke_ratio=stroke_ratio,
         pickup_ms=pickup_ms, release_ms=release_ms,
-        retract_start_ms=retract_start_ms,
-        window_start_ms=window_start_ms, window_end_ms=window_end_ms,
+        retract_deg=retract_deg, retract_start_ms=retract_start_ms,
+        window_start_deg=wstart_deg, window_start_ms=window_start_ms,
+        window_end_ms=window_end_ms,
         window_end_deg=window_end_deg,
         seat_ms=seat_ms, seat_deg=seat_deg, delay_ms=delay_ms,
+        advance_ms=advance_ms,
         next_pickup_ms=next_pickup_ms, next_retract_ms=next_retract_ms,
     )

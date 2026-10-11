@@ -2,7 +2,9 @@
 """器件参数表：通用二号波默认值（实测与社区经验基准）。
 
 ⚠ 参数置信度标注：【估算】= 未经实测的社区经验值，结论精度依赖校准；
-  已确认参数（扇齿 16 齿 × 11.25° = 满齿弧 180°）来自用户确认。
+  已确认参数（扇齿 16 齿，每齿 12°，满拉弧 = 16×12 = 192°；✅v3.9 用户实测
+  更正：15 个齿距占圆周 180° → 每齿 12°，原「16×11.25=180°」口径有误）
+  来自用户确认。
   所有参数均可在配置「器件参数覆盖」或网页界面中覆盖。
   建议校准顺序：实测初速反标「气动效率」 → 实测弹簧改「弹簧刚度表」
   → 卡尺量「气缸内径」「活塞满行程」→ 实测「弹簧预压」「活塞质量」。
@@ -27,7 +29,9 @@ class DeviceParams:
 
     # ---- 扇齿与切齿 ----
     sector_full_teeth: int = 16        # 扇齿满啮合齿数（未切齿）
-    sector_pitch_deg: float = 11.25    # 每齿对应的扇齿转角（满弧 180°，16×11.25）
+    sector_pitch_deg: float = 12.0     # 每齿对应的扇齿转角（✅v3.9 用户实测更正：
+                                       # 15 个齿距占圆周 180° → 每齿 12°，原 11.25° 有误；
+                                       # 满拉弧 = 16 齿 × 12° = 192°）
     tappet_teeth: float = 13.5         # 天梯（活塞齿条）齿数（✅v0.6.9 默认=原装 13.5；
                                        # 市售 11.5 齿等半齿规格可）：半齿=第二齿磨低防
                                        # 咬合，仍按整齿咬合 → 计整齿（13.5→14、11.5→12）；
@@ -41,7 +45,7 @@ class DeviceParams:
     # 几何锚定（✅ 用户确认）：拉桥柱位于第 2 颗齿下方——当扇齿第 2 颗齿接触
     # 活塞天梯（= 无切拾取角 + 1 齿距）时，拉桥柱开始拉动拉桥旗、推嘴后缩；
     # 因此前切时拾取角后移，拉桥柱相对拾取更早开始拉推嘴（凸轮事件仍固定于扇齿）。
-    cam_retract_start_deg: float = 11.25  # 【✅几何确认】推嘴开始缩回 = 拾取角 + 1 齿距
+    cam_retract_start_deg: float = 12.0   # 【✅几何确认】推嘴开始缩回 = 拾取角 + 1 齿距（12°）
     cam_retract_end_deg: float = 50.0     # 【估算】推嘴完全缩回（供蛋窗口开始）
     cam_return_start_deg: float = 144.4   # 【估算】推嘴开始回位（供蛋窗口结束）
     cam_return_end_deg: float = 164.4     # 【估算】推嘴回位完成（气密就位）
@@ -113,8 +117,20 @@ class DeviceParams:
     # 延时器几何（✅ 用户确认）：扇齿一圈有 10 个拉桥柱安装孔（每孔 36°）；
     # 装延时器相当于拉桥柱加粗一倍、占用 2 个孔 → 推嘴保持拉开的时长多出 1 孔（36°），
     # 即回位起始/完成推迟 = 孔数 ÷ 总孔数 × 周期（随射速自动缩放，非固定毫秒）。
-    cam_hole_count: int = 10              # 【✅用户确认】拉桥柱安装孔数（一圈）
-    delay_device_holes: float = 1.0       # 【✅用户确认】延时器额外占用的孔数（默认 1 孔 = 36°）
+    cam_hole_count: int = 10              # 【✅用户确认】拉桥柱安装孔数（一圈；
+                                          # 结论建议附「每孔 ≈ms」供选择延时度数参考）
+    delay_device_holes: float = 1.0       # 【✅v4.0 已弃用】占孔几何模型改为直接的
+                                          # 「延时器提前度数 / 延时器延时度数」角度参数
+                                          # （36°=1 孔），此键被接受但忽略、不参与计算
+    delay_advance_deg: float = 0.0        # 【✅v4.0 用户新增】延时器提前度数：比原拉桥柱
+                                          # 更早接触拉桥旗的扇齿转角 → 推嘴开始缩回与
+                                          # 完全缩回（供蛋窗口开始）提前该角度（>缩回
+                                          # 起点角时钳制至 0°，不越到拾取之前）
+    delay_hold_deg: float = 36.0          # 【✅v4.0 用户新增】延时器延时度数：比原拉桥柱
+                                          # 更晚离开拉桥旗的扇齿转角 → 推嘴回位起始/完成
+                                          # 推迟该角度（供蛋窗口加宽、气密就位更晚）；
+                                          # 默认 36° = 原「1 孔」口径，装延时器默认行为
+                                          # 与旧占孔模型等价
     flag_cut_advance_ms: float = 3.0      # 【估算】切拉桥旗使推嘴回位完成提前的时间
 
     def tappet_bite(self) -> int:
@@ -158,6 +174,8 @@ DEVICE_KEY_MAP = {
     "最大供蛋速率表": "feed_max_rps",
     "拉桥柱孔数": "cam_hole_count",
     "延时器占孔数": "delay_device_holes",
+    "延时器提前度数": "delay_advance_deg",
+    "延时器延时度数": "delay_hold_deg",
     "切拉桥旗提前ms": "flag_cut_advance_ms",
 }
 
@@ -184,11 +202,82 @@ THRESHOLD_KEY_MAP = {
 }
 
 
+# 表类型覆盖参数（JSON 键 → 值为「键→数字」映射，整体替换非合并）
+OVERRIDE_DICT_KEYS = ("弹簧刚度表", "气缸系数表", "最大供蛋速率表")
+
+# 数值型覆盖参数的合理范围（dataclass 字段名 → (下限, 上限)，闭区间）；
+# 未列出的数值参数只做「必须是数字」类型校验。
+# 天梯齿数 / 开孔段保留系数 / 弹簧预压mm 不在此表——解析层（params.py）
+# 有更详细的专项校验与中文提示，避免被通用范围提示抢先拦截。
+OVERRIDE_RANGE = {
+    "sector_full_teeth": (1, 64),
+    "sector_pitch_deg": (0.1, 90.0),
+    "cam_retract_start_deg": (0.0, 360.0),
+    "cam_retract_end_deg": (0.0, 360.0),
+    "cam_return_start_deg": (0.0, 360.0),
+    "cam_return_end_deg": (0.0, 360.0),
+    "piston_full_stroke_mm": (1.0, 500.0),
+    "piston_mass_g": (0.1, 1000.0),
+    "spring_free_length_mm": (1.0, 2000.0),
+    "spring_installed_length_mm": (1.0, 2000.0),
+    "spring_compressed_length_mm": (0.0, 2000.0),
+    "piston_head_restitution": (0.0, 1.0),
+    "drive_efficiency": (0.01, 1.0),
+    "cylinder_bore_mm": (1.0, 200.0),
+    "cylinder_length_mm": (1.0, 1000.0),
+    "dead_volume_cm3": (0.0, 100.0),
+    "gel_mass_g": (0.01, 10.0),
+    "aero_efficiency": (0.01, 1.0),
+    "adiabatic_index": (1.0, 3.0),
+    "leak_coeff": (0.0, 100.0),
+    "atm_kpa": (10.0, 200.0),
+    "cam_hole_count": (1, 100),
+    "delay_device_holes": (0.0, 100.0),
+    "delay_advance_deg": (0.0, 180.0),
+    "delay_hold_deg": (0.0, 180.0),
+    "flag_cut_advance_ms": (0.0, 1000.0),
+    "gear_clash_margin_ms": (0.0, 1000.0),
+    "air_seal_margin_ms": (0.0, 1000.0),
+    "low_air_index": (0.0, 1.0),
+    "min_remain_teeth": (0, 64),
+    "velocity_warn_ms": (1.0, 1000.0),
+    "barrel_match_ratio": (0.0, 1.0),
+}
+
+
 def apply_overrides(obj, overrides: dict, key_map: dict, errors: list):
-    """把 JSON 覆盖字典应用到 dataclass 实例（中文键）。"""
+    """把 JSON 覆盖字典应用到 dataclass 实例（中文键，含类型/范围校验）。
+
+    ✅v0.8.2：此前覆盖值不做任何校验——非数字（如 "abc"）会在后续计算层
+    抛 TypeError、表键缺失会 KeyError、除零参数会 ZeroDivisionError，
+    均为英文堆栈。现在统一在此拦截并给出中文错误（与主配置键校验同风格）。
+    """
     for key, value in (overrides or {}).items():
         attr = key_map.get(key)
         if attr is None:
             errors.append("未知的覆盖参数: %s" % key)
             continue
+        if key in OVERRIDE_DICT_KEYS:
+            # 表类型：必须是 JSON 对象，且所有值为数字（表为整体替换）
+            if not isinstance(value, dict):
+                errors.append("覆盖参数 %s 必须是 JSON 对象（键→数字 的表），"
+                              "实际为: %r" % (key, value))
+                continue
+            bad = next((v for v in value.values()
+                        if isinstance(v, bool) or not isinstance(v, (int, float))),
+                       None)
+            if bad is not None:
+                errors.append("覆盖参数 %s 表中的值必须是数字，实际含: %r"
+                              % (key, bad))
+                continue
+        else:
+            # 数值类型：拒绝布尔与非数字
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                errors.append("覆盖参数 %s 必须是数字，实际为: %r" % (key, value))
+                continue
+            rng = OVERRIDE_RANGE.get(attr)
+            if rng is not None and not rng[0] <= value <= rng[1]:
+                errors.append("覆盖参数 %s 需在 %g~%g 之间，实际为: %r"
+                              % (key, rng[0], rng[1], value))
+                continue
         setattr(obj, attr, value)

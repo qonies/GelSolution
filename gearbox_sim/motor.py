@@ -17,7 +17,9 @@
     近似恒定）；以拾取瞬间的**峰值扭矩**判断是否堵转；
     忽略电机转子惯性与加速过程（对 ROF 影响为毫秒级瞬态）。
 
-反射关系：扇齿分度圆半径 r = 满行程弧长 ÷ π（满齿弧 180°）；
+反射关系：扇齿分度圆半径 r = 满行程弧长 ÷ 满拉弧角（弧度）
+  （满拉弧 = 扇齿齿数 × 每齿角 = 16×12 = 192°，✅v3.9 用户实测更正：
+  15 个齿距占 180° → 每齿 12°，原「16×11.25=180°」口径有误）；
   弹簧力 F 作用在齿条上 → 扇齿扭矩 τ = F × r → 电机轴 τ_m = τ ÷ 齿轮比。
 """
 import math
@@ -113,7 +115,10 @@ def resolve_loaded_rpm(cfg, dev):
     remain_ratio = min(max(bite - cfg.front_cut - cfg.rear_cut, 0),
                        TAPPET_STOCK_BITE) / TAPPET_STOCK_BITE
     s = dev.piston_full_stroke_mm / 1000.0 * remain_ratio   # 实际拉程 (m)
-    r = dev.piston_full_stroke_mm / 1000.0 / math.pi        # 扇齿分度圆半径 (m)
+    # 扇齿分度圆半径：拉程弧长 ÷ 满拉弧角（弧度）——满拉弧 = 齿数 × 每齿角
+    # （✅v3.9：16 齿 × 12° = 192°；原「行程÷π」按 180° 口径，随更正参数化）
+    full_arc_deg = dev.sector_full_teeth * dev.sector_pitch_deg
+    r = dev.piston_full_stroke_mm / 1000.0 / math.radians(full_arc_deg)
     k = dev.spring_stiffness[cfg.spring] * 1000.0           # N/m
     x0 = dev.spring_preload_mm / 1000.0
 

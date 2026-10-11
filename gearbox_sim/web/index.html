@@ -139,6 +139,26 @@ tr.hl td{background:#eaf1ff}
   </div>
 
   <div class="psec">
+    <div class="psec-h"><b>延时器</b></div>
+    <div class="group"><label><input type="checkbox" id="modDelay" style="width:auto;vertical-align:middle"> 安装延时器（比原拉桥柱更早接触、更晚离开拉桥旗 → 加宽供蛋窗口）</label></div>
+    <div class="group duo">
+      <div><label>提前度数 °（更早接触拉桥旗的转角：缩回/供蛋窗口开始提前）</label><input type="number" id="dvDelayAdv" step="1"></div>
+      <div><label>延时度数 °（更晚离开拉桥旗的转角：回位/气密就位推迟）</label><input type="number" id="dvDelayHold" step="1"></div>
+    </div>
+  </div>
+
+  <div class="psec">
+    <div class="psec-h"><b>拉桥旗</b></div>
+    <div class="group"><label><input type="checkbox" id="modFlag" style="width:auto;vertical-align:middle"> 切拉桥旗（切S尾：推嘴更早更快恢复，需强拉桥簧）</label>
+      <div class="row" style="margin-top:5px"><label style="flex:1;font-size:12px;color:var(--sub);margin:0">切拉桥旗提前 ms</label>
+        <input type="number" id="dvFlag" step="0.5" style="width:92px"></div></div>
+    <div class="group duo">
+      <div><label>推嘴回位起始角 °（拉桥旗槽凸轮角：供蛋窗口结束）</label><input type="number" id="dvRetS" step="1"></div>
+      <div><label>推嘴回位完成角 °（气密就位）</label><input type="number" id="dvRetE" step="1"></div>
+    </div>
+  </div>
+
+  <div class="psec">
     <div class="psec-h"><b>其他参数</b></div>
     <div class="group duo">
       <div><label>供蛋方式</label><select id="feedMode">
@@ -149,12 +169,8 @@ tr.hl td{background:#eaf1ff}
     <div class="group"><label>内管长度 mm</label>
       <div class="row"><input type="range" id="blS" min="100" max="600" step="10" style="flex:1">
         <input type="number" id="bl" min="20" max="800" step="5" style="width:92px"></div></div>
-    <div class="group duo">
-      <div><label>水弹直径（不得大于管径）</label><select id="ball">
-        <option selected value="7.2">7.2</option><option value="7.3">7.3</option></select></div>
-      <div><label><input type="checkbox" id="modDelay" style="width:auto;vertical-align:middle"> 安装延时器（加宽供蛋窗口）</label></div>
-    </div>
-    <div class="group"><label><input type="checkbox" id="modFlag" style="width:auto;vertical-align:middle"> 切拉桥旗（切S尾：推嘴更早更快恢复，需强拉桥簧）</label></div>
+    <div class="group"><label>水弹直径（不得大于管径）</label><select id="ball">
+      <option selected value="7.2">7.2</option><option value="7.3">7.3</option></select></div>
     <details><summary>判定阈值（已预填系统默认值，可参考或修改）</summary>
       <div class="group duo"><div><label>打齿安全裕量 ms</label><input type="number" id="thClash" step="0.1"></div>
         <div><label>气密最小裕量 ms</label><input type="number" id="thSeal" step="0.1"></div></div>
@@ -164,14 +180,10 @@ tr.hl td{background:#eaf1ff}
         <div><label>最少保留啮合齿数</label><input type="number" id="thTeeth" step="1"></div></div>
     </details>
     <details><summary>其他器件参数（已预填系统默认值，可修改 / 实测校准）</summary>
-      <div style="font-size:12px;color:var(--sub);margin-bottom:6px">以下为通用二号波默认参数（含【估算】值，报告尾部附估算清单）；气缸/弹簧/活塞相关器件参数已移至上方对应分区。清空某项 = 恢复该系统默认。</div>
+      <div style="font-size:12px;color:var(--sub);margin-bottom:6px">以下为通用二号波默认参数（含【估算】值，报告尾部附估算清单）；气缸/弹簧/活塞/延时器相关器件参数已移至上方对应分区。清空某项 = 恢复该系统默认。</div>
       <div class="group duo"><div><label>气动效率</label><input type="number" id="dvEff" step="0.01"></div>
         <div><label>水弹质量 g</label><input type="number" id="dvMass" step="0.01"></div></div>
-      <div class="group duo"><div><label>泄气损失系数</label><input type="number" id="dvLeak" step="0.1"></div>
-        <div><label>推嘴回位起始角 °</label><input type="number" id="dvRetS" step="1"></div></div>
-      <div class="group duo"><div><label>推嘴回位完成角 °</label><input type="number" id="dvRetE" step="1"></div>
-        <div><label>延时器占孔数（1孔=36°，装延时器=2孔）</label><input type="number" id="dvDelay" step="0.5"></div></div>
-      <div class="group duo"><div><label>切拉桥旗提前 ms</label><input type="number" id="dvFlag" step="0.5"></div><div></div></div>
+      <div class="group duo"><div><label>泄气损失系数</label><input type="number" id="dvLeak" step="0.1"></div><div></div></div>
     </details>
   </div>
   <div class="buttons">
@@ -245,7 +257,8 @@ function collect(){
                 "dvDead":"气缸余隙容积cm3","dvPreload":"弹簧预压mm","dvLeak":"泄气损失系数",
                 "dvStroke":"活塞满行程mm","dvTappet":"天梯齿数","dvPistonMass":"活塞质量g",
                 "dvRetS":"推嘴回位起始角","dvRetE":"推嘴回位完成角",
-                "dvDelay":"延时器占孔数","dvFlag":"切拉桥旗提前ms"};
+                "dvDelayAdv":"延时器提前度数","dvDelayHold":"延时器延时度数",
+                "dvFlag":"切拉桥旗提前ms"};
   for(const [id,k] of Object.entries(devMap)){const v=num(id);if(v!==null)cfg["器件参数覆盖"][k]=v;}
   const thMap={"thClash":"打齿安全裕量ms","thSeal":"气密最小裕量ms","thV":"初速警告阈值m/s",
                "thBarrel":"管长匹配比例","thAir":"压气不足阈值","thTeeth":"最少保留啮合齿数"};
@@ -283,7 +296,8 @@ function applyConfig(c){
                 "气缸余隙容积cm3":"dvDead","弹簧预压mm":"dvPreload","泄气损失系数":"dvLeak",
                 "活塞满行程mm":"dvStroke","天梯齿数":"dvTappet","活塞质量g":"dvPistonMass",
                 "推嘴回位起始角":"dvRetS","推嘴回位完成角":"dvRetE",
-                "延时器占孔数":"dvDelay","切拉桥旗提前ms":"dvFlag"};
+                "延时器提前度数":"dvDelayAdv","延时器延时度数":"dvDelayHold",
+                "切拉桥旗提前ms":"dvFlag"};
   const revTh={"打齿安全裕量ms":"thClash","气密最小裕量ms":"thSeal","初速警告阈值m/s":"thV",
                "管长匹配比例":"thBarrel","压气不足阈值":"thAir","最少保留啮合齿数":"thTeeth"};
   for(const k in revDev)$(revDev[k]).value=(c["器件参数覆盖"]&&c["器件参数覆盖"][k]!=null)?c["器件参数覆盖"][k]:(DEVDEF[k]!=null?DEVDEF[k]:"");
@@ -475,7 +489,8 @@ function bind(){
   for(const id of ["battCells","battCap","battC","modDelay","modFlag","ratio","cyl","spring","feedMode","fc","rc","bore","ball",
                    "thClash","thSeal","thV","thBarrel","thAir","thTeeth",
                    "dvEff","dvMass","dvBore","dvCylLen","dvDead","dvPortRet","dvLeak","dvStroke",
-                   "dvTappet","dvPistonMass","dvPreload","dvResti","dvRetS","dvRetE","dvDelay","dvFlag"])
+                   "dvTappet","dvPistonMass","dvPreload","dvResti","dvRetS","dvRetE",
+                   "dvDelayAdv","dvDelayHold","dvFlag"])
     $(id).addEventListener("input",schedule);
   $("btnSim").addEventListener("click",simulate);
   $("btnExport").addEventListener("click",()=>{

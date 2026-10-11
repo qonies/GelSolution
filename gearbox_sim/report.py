@@ -42,12 +42,16 @@ def _scheme_table(rows):
 def events_list(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn: Dynamics,
                 feed: FeedResult, bal: Ballistics):
     """单循环事件列表（文本报告与网页界面共用）。"""
-    # 单循环终点 = 下一循环首个事件（✅v3.5：推嘴缩回起点角固定于扇齿 11.25°，
-    # 前切 n≥2 时下一循环推嘴缩回早于下一循环活塞拾取，不能固定为拾取）
+    # 单循环终点 = 下一循环首个事件（✅v3.5：推嘴缩回起点角固定于扇齿（拾取
+    # +1 齿距 = 12°），前切 n≥2 时下一循环推嘴缩回早于下一循环活塞拾取，
+    # 不能固定为拾取）
     margin_note = "回位裕量 %.2f ms" % bal.return_margin_ms
     next_retract_ms = tl.period_ms + tl.retract_start_ms
+    retract_desc = "推嘴开始缩回"
+    if tl.advance_ms > 1e-9:
+        retract_desc += "（延时器提前 %.0f°）" % dev.delay_advance_deg
     if next_retract_ms < tl.next_pickup_ms - 1e-9:
-        last = {"t": next_retract_ms, "angle": dev.cam_retract_start_deg + 360,
+        last = {"t": next_retract_ms, "angle": tl.retract_deg + 360,
                 "desc": "下一循环推嘴开始缩回（前切：早于下一循环拾取 %.2f ms；%s）"
                         % (tl.next_pickup_ms - next_retract_ms, margin_note)}
     elif next_retract_ms > tl.next_pickup_ms + 1e-9:
@@ -59,8 +63,8 @@ def events_list(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn: Dynamics,
                         % margin_note}
     return [
         {"t": tl.pickup_ms, "angle": tl.pickup_deg, "desc": "活塞拾取，开始被拉动"},
-        {"t": tl.retract_start_ms, "angle": dev.cam_retract_start_deg, "desc": "推嘴开始缩回"},
-        {"t": tl.window_start_ms, "angle": dev.cam_retract_end_deg,
+        {"t": tl.retract_start_ms, "angle": tl.retract_deg, "desc": retract_desc},
+        {"t": tl.window_start_ms, "angle": tl.window_start_deg,
          "desc": "推嘴完全缩回 → 供蛋窗口开始"},
         {"t": tl.window_end_ms, "angle": tl.window_end_deg,
          "desc": "推嘴开始回位 → 供蛋窗口结束（窗口 %.1f ms）" % feed.window_ms},
@@ -118,8 +122,10 @@ def render(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn: Dynamics,
              % (feed.mode, feed.max_rps))
     mods = []
     if cfg.install_delay:
-        mods.append("已安装延时器（占 %.1f 孔，回位推迟 %.1f ms）"
-                    % (dev.delay_device_holes, tl.delay_ms))
+        mods.append("已安装延时器（提前 %.0f° / 延时 %.0f°：缩回提前 %.1f ms、"
+                    "回位推迟 %.1f ms）"
+                    % (dev.delay_advance_deg, dev.delay_hold_deg,
+                       tl.advance_ms, tl.delay_ms))
     if cfg.cut_flag:
         mods.append("已切拉桥旗（S 形缓冲尾切除：回位提前 %.1f ms 且更快恢复；"
                     "需搭配更强拉桥簧）" % dev.flag_cut_advance_ms)

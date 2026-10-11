@@ -235,10 +235,6 @@ def build_conclusion(cfg: SimConfig, best: SchemeRow, bal=None, tl=None) -> List
     """结论建议：推荐切齿方案 / 是否需要延时器 / 是否需要切拉桥旗 / 初速。"""
     out = []
     th = cfg.threshold
-    # 延时器推迟量：取时序层的弧段精确值（变转速下与 周期×占孔比 略有差异）
-    delay_ms = tl.delay_ms if tl is not None else 0.0
-    hole_ms = (tl.period_ms / cfg.device.cam_hole_count
-               if tl is not None else None)
 
     # 0) 初速概况
     if bal is not None:
@@ -265,15 +261,20 @@ def build_conclusion(cfg: SimConfig, best: SchemeRow, bal=None, tl=None) -> List
 
     # 2) 延时器（✅v3.4：供蛋方式上限 = 实际支持发射的能力，不换算每发平均
     #    供蛋时间对比窗口——是否需要延时器取决于实测供蛋，不做定量判定）
+    # 延时器推迟量：取时序层的弧段精确值（变转速下与 周期×占孔比 略有差异）；
+    # ✅v0.8.2：此块原在函数开头重复计算一份（死代码且未防孔数为 0 除零），已移除
     delay_ms = tl.delay_ms if tl is not None else 0.0
     hole_ms = (tl.period_ms / cfg.device.cam_hole_count
                if tl is not None and cfg.device.cam_hole_count else None)
     if cfg.install_delay:
-        out.append("延时器：已安装（回位推迟 %.1f ms）—— 供蛋窗口加宽至 %.1f ms；"
+        out.append("延时器：已安装（缩回提前 %.1f ms / 回位推迟 %.1f ms，"
+                   "提前 %.0f° / 延时 %.0f°）—— 供蛋窗口加宽至 %.1f ms；"
                    "注意气密裕量同步减小"
-                   % (delay_ms, best.window_ms))
+                   % (tl.advance_ms, delay_ms, cfg.device.delay_advance_deg,
+                      cfg.device.delay_hold_deg, best.window_ms))
     else:
-        hole_note = ("每孔 ≈%.1f ms" % hole_ms) if hole_ms else ""
+        hole_note = ("延时默认 36° = 1 孔（每孔 ≈%.1f ms），"
+                     "提前/延时度数可在器件参数覆盖中调整" % hole_ms) if hole_ms else ""
         out.append("是否需要延时器：视实测而定 —— 供蛋窗口 %.1f ms；供蛋能力上限"
                    "（%s %.0f 发/秒）指其实际支持发射的能力，窗口是否足够以实测"
                    "供蛋为准；若实测供蛋不上可安装延时器加宽窗口（%s），"

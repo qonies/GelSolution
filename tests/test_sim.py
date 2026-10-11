@@ -55,11 +55,11 @@ tl = build_timeline(cfg, cfg.device)
 check("周期公式 60000*R/rpm", abs(tl.period_ms - 32.0) < 1e-9, "T=%.2fms" % tl.period_ms)
 check("射速 = 1/T", abs(tl.rof_rps - 1000.0 / 32.0) < 1e-9)
 
-# ---- 2. 切齿时序（满齿 16 齿，每齿 11.25°，满弧 180°）----
+# ---- 2. 切齿时序（满齿 16 齿，每齿 12°（✅v3.9：15 齿距占 180°），满拉弧 192°）----
 cfg = make_cfg(front_cut=2, rear_cut=2)
 tl = build_timeline(cfg, cfg.device)
-check("前切2 → 拾取角 22.5°", abs(tl.pickup_deg - 22.5) < 1e-9)
-check("后切2 → 释放角 157.5°", abs(tl.release_deg - 157.5) < 1e-9)
+check("前切2 → 拾取角 24°", abs(tl.pickup_deg - 24.0) < 1e-9)
+check("后切2 → 释放角 168°", abs(tl.release_deg - 168.0) < 1e-9)
 check("行程 = 10/14 满行程（咬合 14 齿基准，前2后2剩10）",
       abs(tl.stroke_mm - 60.5 * 10 / 14) < 1e-9)
 check("凸轮事件不随切齿移动", abs(tl.seat_ms - 164.4 / 360.0 * 32.0) < 1e-9)
@@ -74,7 +74,8 @@ check("弹簧储能公式", abs(dyn.energy_mj - e_expect) < 1e-6, "E=%.1fmJ" % d
 check("释放速度 = √(2E·效率/m)", abs(dyn.v_release_m_s -
       (2 * e_expect / 1000.0 * 0.85 / 0.02) ** 0.5) < 1e-9,
       "v=%.2f" % dyn.v_release_m_s)
-check("释放时刻 180°/360°×T", abs(tl.release_ms - 16.0) < 1e-9)
+check("释放时刻 192°/360°×T（满拉弧 16×12=192°）",
+      abs(tl.release_ms - 192.0 / 360.0 * 32.0) < 1e-9)
 
 tl, dyn, feed, bal, checks = full(make_cfg())
 check("回位裕量 = 下一拾取 − 稳定完成", abs(bal.return_margin_ms -
@@ -112,8 +113,12 @@ cfg = make_cfg(rear_cut=4, cylinder="50%")
 tl, dyn, feed, bal, checks = full(cfg)
 sm50 = bal.p_rise_ms - tl.seat_ms
 lv = {c.name: c.level for c in checks}
-check("后切4+50%缸 压力于盖孔时已建立 → 气密危险（保留模型修正旧『泄压段放宽』）",
-      lv["气密时序"] == LEVEL_DANGER, "level=%s margin=%.2f" % (lv["气密时序"], sm50))
+# ✅v3.9 满拉弧 192°（每齿 12°）：后切4 释放角 = 192−48 = 144°（旧 180−45=135°），
+# 凸轮回位完成角（164.4°）相对释放点的提前量减小 9° → 50%缸+后切4 由危险转为
+# 临界警告（裕量 ≈0），重后切气密收紧的方向不变、程度略缓
+check("后切4+50%缸 → 气密临界警告（满拉弧 192° 口径下盖孔相对回位完成提前量减小）",
+      lv["气密时序"] == LEVEL_WARN and sm50 >= 0.0,
+      "level=%s margin=%.2f" % (lv["气密时序"], sm50))
 check("气密裕量排序保持：100%缸 < 70%缸 < 50%缸（盖孔越晚裕量越大）",
       sm < sm70 < sm50, "%.2f < %.2f < %.2f" % (sm, sm70, sm50))
 
@@ -254,7 +259,8 @@ from gearbox_sim import motor as gmotor
 
 n, info, batt = gmotor.resolve_loaded_rpm(make_cfg(motor_model="超力有刷3W5"),
                                           make_cfg().device)
-check("3W5 负载转速（弹簧反射扭矩法）", abs(n - 29607.0) < 40.0,
+check("3W5 负载转速（弹簧反射扭矩法；✅v3.9 分度圆半径随满拉弧 192° 缩小）",
+      abs(n - 29947.0) < 40.0,
       "n=%.0f RPM" % n)
 check("3W5 无电池 → 理想电源", batt is None)
 check("3W5 信息完整", info.model == "超力有刷3W5" and not info.stall
@@ -262,12 +268,13 @@ check("3W5 信息完整", info.model == "超力有刷3W5" and not info.stall
 
 tl, dyn, feed, bal, checks = full(make_cfg(motor_model="超力有刷3W5"))
 lv = {c.name: c.level for c in checks}
-# 变转速：拉动段（180°）按负载转速 n，空转段（180°）按空载转速（3W5 曲线 35500×负载系数）
-T_piece = (0.5 * 60000.0 * 16 / n
-           + 0.5 * 60000.0 * 16 / (tl.free_rpm))
+# 变转速：拉动段（192°）按负载转速 n，空转段（168°）按空载转速（3W5 曲线 35500×负载系数）
+T_piece = (192.0 / 360.0 * 60000.0 * 16 / n
+           + 168.0 / 360.0 * 60000.0 * 16 / (tl.free_rpm))
 check("曲线模式分段周期（拉动+空转）", abs(tl.period_ms - T_piece) < 0.2,
-      "T=%.2fms（拉动 %.1f + 空转 %.1f）" % (tl.period_ms, 0.5 * 60000.0 * 16 / n,
-                                            0.5 * 60000.0 * 16 / tl.free_rpm))
+      "T=%.2fms（拉动 %.1f + 空转 %.1f）" % (tl.period_ms,
+                                             192.0 / 360.0 * 60000.0 * 16 / n,
+                                             168.0 / 360.0 * 60000.0 * 16 / tl.free_rpm))
 check("曲线模式空转转速 = 空载×负载系数", abs(tl.free_rpm - 35500.0 * 1.0) < 1.0,
       "free=%.0f RPM" % tl.free_rpm)
 check("曲线模式 ROF ≈ 分段周期倒数", abs(tl.rof_rps - 1000.0 / T_piece) < 0.2,
@@ -301,7 +308,7 @@ check("固定模式无电机负载计算", tl.torque_peak_ratio is None
       and lv["电机负载"] == LEVEL_OK)
 
 # ---- 9b. 电池模型 ----
-# 无跌落：4W8 + 4S 2200mAh 40C（持续 88A > 峰值需求 ~62A）
+# 无跌落：4W8 + 4S 2200mAh 40C（持续 88A > 峰值需求 ~58A；✅v3.9 反射半径缩小后峰值需求降）
 cfg = make_cfg(motor_model="超力无刷4W8", batt_cells=4,
                batt_capacity_mah=2200.0, batt_c_rate=40.0)
 tl, dyn, feed, bal, checks = full(cfg)
@@ -313,7 +320,7 @@ check("4S 满电 16.8V 提升负载转速（> 曲线 11.1V）", tl.loaded_rpm > 
 check("续航估算合理", 1000.0 < tl.batt_shots < 50000.0,
       "shots=%.0f" % tl.batt_shots)
 
-# 压降：4W8 + 3S 1200mAh 30C（持续 36A < 峰值需求 ~46A）→ 轻微跌落警告
+# 压降：4W8 + 3S 1200mAh 30C（持续 36A < 峰值需求 ~41A）→ 轻微跌落警告
 cfg = make_cfg(motor_model="超力无刷4W8", batt_cells=3,
                batt_capacity_mah=1200.0, batt_c_rate=30.0)
 tl, dyn, feed, bal, checks = full(cfg)
@@ -323,14 +330,22 @@ check("3S 1200 30C → 峰值超电池能力", tl.batt_sag < 1.0,
 check("轻微跌落 → 电池放电警告", lv["电池放电"] == LEVEL_WARN,
       "sag=%.3f" % tl.batt_sag)
 
-# 严重压降：4W8 + 3S 1100mAh 30C（持续 33A）→ 跌落超 25% → 危险
+# 严重压降：4W8 + 3S 1000mAh 30C（持续 30A）→ 跌落超 25% → 危险
+# （✅v3.9 反射半径缩小后峰值需求 ~43A：3S1100/30C 跌落 ~24% 转为警告，
+#   加 3S1000/30C 用例保持危险分支覆盖）
 cfg = make_cfg(motor_model="超力无刷4W8", batt_cells=3,
                batt_capacity_mah=1100.0, batt_c_rate=30.0)
 tl, dyn, feed, bal, checks = full(cfg)
 lv = {c.name: c.level for c in checks}
-check("4W8+3S1100 30C 电压严重跌落 → 危险", lv["电池放电"] == LEVEL_DANGER,
+check("4W8+3S1100 30C 电压跌落约 24% → 警告", lv["电池放电"] == LEVEL_WARN,
       "sag=%.3f" % tl.batt_sag)
 check("压降降低负载转速", tl.loaded_rpm < 48000.0)
+cfg = make_cfg(motor_model="超力无刷4W8", batt_cells=3,
+               batt_capacity_mah=1000.0, batt_c_rate=30.0)
+tl, dyn, feed, bal, checks = full(cfg)
+lv = {c.name: c.level for c in checks}
+check("4W8+3S1000 30C 电压跌落超 25% → 危险", lv["电池放电"] == LEVEL_DANGER,
+      "sag=%.3f" % tl.batt_sag)
 
 # 无电池 → 电池判定显示未配置
 tl, dyn, feed, bal, checks = full(make_cfg(motor_model="超力无刷4W8"))
@@ -347,7 +362,8 @@ tl, dyn, feed, bal, checks = full(make_cfg(install_delay=True))
 check("延时器推迟推嘴回位完成", tl.seat_ms > tl0.seat_ms)
 check("延时器加宽供蛋窗口", win(tl) > win(tl0),
       "window %.1f→%.1f" % (win(tl0), win(tl)))
-check("延时器几何：1 孔 = 周期×1/10", abs(tl.delay_ms - tl0.period_ms / 10.0) < 1e-9,
+check("延时器默认延时 36°（=原 1 孔口径）= 周期×1/10",
+      abs(tl.delay_ms - tl0.period_ms / 10.0) < 1e-9,
       "delay=%.2f ms (T=%.1f ms)" % (tl.delay_ms, tl0.period_ms))
 check("气密裕量随延时器等量减小",
       abs((b0.p_rise_ms - tl0.seat_ms) - (bal.p_rise_ms - tl.seat_ms) - tl.delay_ms) < 1e-6)
@@ -363,17 +379,17 @@ check("切拉桥旗增大气密裕量",
 
 # 组合 + 下限保护：大延时 + 切旗，回位完成不得早于回位起始
 cfg = make_cfg(install_delay=True, cut_flag=True)
-cfg.device.delay_device_holes = 6.25   # 6.25 孔 ≈ 20ms @32ms 周期
+cfg.device.delay_hold_deg = 225.0      # 225°（=原 6.25 孔）≈ 20ms @32ms 周期
 cfg.device.flag_cut_advance_ms = 10.0
 tl, dyn, feed, bal, checks = full(cfg)
 check("回位完成不早于回位起始（下限保护）", tl.seat_ms >= tl.window_end_ms)
 
 # 延时器加宽供蛋窗口（8.4ms → +10ms = 18.4ms；✅v0.7.1 窗口判定已移除，仅时序信息）
 cfg = make_cfg(install_delay=True)
-cfg.device.delay_device_holes = 3.125  # 3.125 孔 ≈ 10ms @32ms 周期
+cfg.device.delay_hold_deg = 112.5      # 112.5°（=原 3.125 孔）≈ 10ms @32ms 周期
 tl, dyn, feed, bal, checks = full(cfg)
 lv = {c.name: c.level for c in checks}
-check("延时 3.125 孔 → 供蛋窗口加宽至 ~18.4ms（窗口判定已移除）",
+check("延时 112.5° → 供蛋窗口加宽至 ~18.4ms（窗口判定已移除）",
       abs(win(tl) - 18.4) < 0.2 and "供蛋窗口" not in lv,
       "window=%.1f" % win(tl))
 
@@ -460,8 +476,8 @@ check("报告含内管/水弹配置行", "内管/水弹" in text and "水弹出�
 # ---- 12. v0.5.9 回归：事件表时刻 / 默认管径 / 曲线模式RPM可省 / 退化哨兵 ----
 cfg = make_cfg()
 tl = build_timeline(cfg, cfg.device)
-check("推嘴缩回起点时刻 = 11.25°×空转ms/°（非硬编码 0）",
-      abs(tl.retract_start_ms - 11.25 * tl.period_ms / 360.0) < 1e-9,
+check("推嘴缩回起点时刻 = 12°×空转ms/°（非硬编码 0；拾取+1 齿距 = 12°）",
+      abs(tl.retract_start_ms - 12.0 * tl.period_ms / 360.0) < 1e-9,
       "t=%.2fms" % tl.retract_start_ms)
 tl, dyn, feed, bal, checks = full(make_cfg())
 ev = [e for e in events_list(cfg, cfg.device, tl, dyn, feed, bal)
@@ -568,7 +584,7 @@ check("新型号已注册（共 4 款）",
                                    "超力有刷3W5", "超力有刷3W3"})
 n39, info39, _ = gmotor.resolve_loaded_rpm(make_cfg(motor_model="超力无刷3W9"),
                                            make_cfg().device)
-check("3W9 负载转速（弹簧反射扭矩法）", abs(n39 - 32281.9) < 40.0,
+check("3W9 负载转速（弹簧反射扭矩法；✅v3.9 满拉弧 192°）", abs(n39 - 32702.0) < 40.0,
       "n=%.0f RPM" % n39)
 check("3W9 峰值扭矩占堵转比例合理（非堵转）",
       not info39.stall
@@ -578,7 +594,7 @@ check("3W9 曲线模式负载系数固定 1",
           {"电机": {"型号": "超力无刷3W9"}}))).load_factor == 1.0)
 n33, info33, _ = gmotor.resolve_loaded_rpm(make_cfg(motor_model="超力有刷3W3"),
                                            make_cfg().device)
-check("3W3 负载转速（弹簧反射扭矩法）", abs(n33 - 27757.3) < 40.0,
+check("3W3 负载转速（弹簧反射扭矩法；✅v3.9 满拉弧 192°）", abs(n33 - 28073.0) < 40.0,
       "n=%.0f RPM" % n33)
 check("3W3 峰值扭矩占堵转比例合理（非堵转）",
       not info33.stall
@@ -795,7 +811,7 @@ check("旧配置 最小供蛋时间ms 被接受并忽略（不再参与判定）
       cfg.feed_mode == "普通波轮")
 
 # ---- 22. v0.7.2 回归：单循环时序终点 = 下一循环首个事件 ----
-# 推嘴缩回起点角固定于扇齿 11.25°：前切 n≥2 时下一循环推嘴缩回早于下一循环
+# 推嘴缩回起点角固定于扇齿（拾取+1 齿距 = 12°）：前切 n≥2 时下一循环推嘴缩回早于下一循环
 # 活塞拾取，时序终点不能固定为拾取
 def _evs(**kw):
     cfg = make_cfg(**kw)
@@ -827,6 +843,171 @@ check("三种前切的终点时刻均不早于周期（下一循环事件）",
       evs0[-1]["t"] >= tl0.period_ms - 1e-9
       and evs1[-1]["t"] >= tl1.period_ms - 1e-9
       and evs2[-1]["t"] >= tl2.period_ms - 1e-9)
+
+# ---- 23. v0.8.2 回归：器件参数覆盖校验（类型/范围/表完整性）+ 延时器孔数除零防护 ----
+# 此前 apply_overrides 不校验覆盖值：非数字 → 计算层 TypeError、表缺键 →
+# KeyError、拉桥柱孔数 0 → ZeroDivisionError（结论层死代码未防护处），
+# 均为英文堆栈；现在统一在解析层给出中文错误
+def _override_error(over):
+    try:
+        load_config(json.loads(json.dumps(
+            {"电机": {"标称转速RPM": 30000}, "器件参数覆盖": over})))
+        return None
+    except ConfigError as e:
+        return str(e)
+
+
+e = _override_error({"拉桥柱孔数": 0})
+check("拉桥柱孔数 0 → 中文报错（原 ZeroDivisionError 崩溃）",
+      e is not None and "拉桥柱孔数" in e, e)
+e = _override_error({"气动效率": "abc"})
+check("气动效率 非数字 → 中文报错（原 TypeError 崩溃）",
+      e is not None and "必须是数字" in e, e)
+e = _override_error({"活塞满行程mm": True})
+check("覆盖值为布尔 → 拒绝（与主配置键口径一致）",
+      e is not None and "必须是数字" in e, e)
+e = _override_error({"气动效率": 5.0})
+check("气动效率 5 超范围 → 中文报错（0.01~1）",
+      e is not None and "0.01~1" in e, e)
+e = _override_error({"弹簧刚度表": "abc"})
+check("弹簧刚度表 非对象 → 中文报错",
+      e is not None and "弹簧刚度表" in e and "JSON 对象" in e, e)
+e = _override_error({"弹簧刚度表": {"M120": 0.9}})
+check("弹簧刚度表 缺当前弹簧键 → 中文报错（原 KeyError 崩溃）",
+      e is not None and "M90" in e, e)
+e = _override_error({"气缸系数表": {"30%": 0.3}})
+check("气缸系数表 缺当前缸型键 → 中文报错",
+      e is not None and "50%" in e, e)
+e = _override_error({"最大供蛋速率表": {"高级波轮": 60.0}})
+check("最大供蛋速率表 缺当前方式键 → 中文报错",
+      e is not None and "普通波轮" in e, e)
+cfgv = load_config(json.loads(json.dumps(
+    {"电机": {"标称转速RPM": 30000},
+     "器件参数覆盖": {"气动效率": 0.30, "弹簧刚度表": {"M90": 0.62}}})))
+check("合法覆盖仍生效（气动效率 0.30 / 单键刚度表替换）",
+      cfgv.device.aero_efficiency == 0.30
+      and cfgv.device.spring_stiffness == {"M90": 0.62})
+
+# 引擎层防护（绕过解析层直接构造器件参数）：孔数 0 仅影响结论「每孔」换算，
+# 延时量已改由 延时度数 角度参数直接计算（✅v4.0），不再依赖孔数
+cfgz = make_cfg(install_delay=True)
+cfgz.device.cam_hole_count = 0
+tlz = build_timeline(cfgz, cfgz.device)
+check("引擎层防护：拉桥柱孔数 0 → 不崩、延时按 延时度数 角度计算（36°=周期/10）",
+      abs(tlz.delay_ms - tlz.period_ms * 36.0 / 360.0) < 1e-9)
+repz = render_full(cfgz)
+check("结论层防护：孔数 0 时报告正常生成（无「每孔」换算）",
+      "结论建议" in repz and "每孔" not in repz)
+
+# ---- 24. v3.9 回归：扇齿几何实测更正（每齿 12°、满拉弧 192°）----
+# ✅用户实测更正：全齿 16 齿，但 15 个齿距占圆周 180° → 每齿 12°（原 11.25° 有误）；
+# 满拉弧 = 16 齿 × 12° = 192°（全部 16 齿参与咬合，拉满行程扇齿转 192°）
+cfg = make_cfg()
+d = cfg.device
+check("每齿角默认 12°（15 齿距占 180°，原 11.25° 有误）",
+      d.sector_pitch_deg == 12.0 and d.cam_retract_start_deg == 12.0)
+tl = build_timeline(cfg, d)
+check("无切满拉弧 = 16×12 = 192°（拾取 0° / 释放 192°）",
+      tl.pickup_deg == 0.0 and abs(tl.release_deg - 192.0) < 1e-9)
+check("凸轮缩回起点 = 拾取 + 1 齿距（12°）且早于回位起始（144.4°）",
+      abs(tl.retract_start_ms - 12.0 / 360.0 * tl.period_ms) < 1e-9
+      and d.cam_return_start_deg > d.cam_retract_start_deg)
+cfgc = make_cfg(motor_model="超力有刷3W5")
+tlc = build_timeline(cfgc, cfgc.device)
+check("反射半径随满拉弧参数化：3W5 负载转速升至 ~29947（原 180° 口径 29607）",
+      abs(tlc.loaded_rpm - 29947.0) < 40.0, "n=%.0f" % tlc.loaded_rpm)
+
+# ---- 25. v4.0 回归：延时器 提前度数 / 延时度数 角度参数（供弹时序）----
+# 提前度数 = 比原拉桥柱更早接触拉桥旗的转角 → 缩回/供蛋窗口开始提前；
+# 延时度数 = 比原拉桥柱更晚离开拉桥旗的转角 → 回位起始/完成推迟
+d25 = make_cfg().device
+check("新参数默认：提前 0° / 延时 36°（与原 1 孔占孔模型等价）",
+      d25.delay_advance_deg == 0.0 and d25.delay_hold_deg == 36.0)
+
+cfg = make_cfg(install_delay=True)
+tl_a = build_timeline(cfg, cfg.device)          # 默认：仅延时 36°
+cfg.device.delay_advance_deg = 12.0
+tl_b = build_timeline(cfg, cfg.device)
+msdeg = tl_b.period_ms / 360.0                  # 固定转速模式匀速：ms/°
+check("提前度数 12° → 缩回/窗口开始提前 12°（弧段换算 ms，advance_ms 同步）",
+      abs(tl_b.retract_start_ms - (tl_a.retract_start_ms - 12.0 * msdeg)) < 1e-6
+      and abs(tl_b.window_start_ms - (tl_a.window_start_ms - 12.0 * msdeg)) < 1e-6
+      and abs(tl_b.advance_ms - 12.0 * msdeg) < 1e-6)
+check("提前度数不改变回位时序（窗口结束/回位完成不变）",
+      abs(tl_b.window_end_ms - tl_a.window_end_ms) < 1e-9
+      and abs(tl_b.seat_ms - tl_a.seat_ms) < 1e-9)
+
+cfg.device.delay_hold_deg = 72.0
+tl_c = build_timeline(cfg, cfg.device)
+check("延时度数 72° → 回位起始/完成推迟 72°（推迟量 = 2× 默认 36°）",
+      tl_c.window_end_ms > tl_a.window_end_ms
+      and abs(tl_c.delay_ms - 2.0 * tl_a.delay_ms) < 1e-6)
+check("提前+延时联合加宽供蛋窗口（= 原 + 提前 12° + 延时 36° 对应 ms）",
+      abs((tl_c.window_end_ms - tl_c.window_start_ms)
+          - (tl_a.window_end_ms - tl_a.window_start_ms)
+          - 12.0 * msdeg - tl_a.delay_ms) < 1e-6)
+
+cfg_n = make_cfg()                               # 未安装延时器：两参数不生效
+cfg_n.device.delay_advance_deg = 30.0
+cfg_n.device.delay_hold_deg = 120.0
+tl_n = build_timeline(cfg_n, cfg_n.device)
+tl_0 = build_timeline(make_cfg(), make_cfg().device)
+check("未安装延时器 → 提前/延时度数均不生效",
+      tl_n.advance_ms == 0.0 and tl_n.delay_ms == 0.0
+      and abs(tl_n.retract_start_ms - tl_0.retract_start_ms) < 1e-9
+      and abs(tl_n.window_start_ms - tl_0.window_start_ms) < 1e-9
+      and abs(tl_n.seat_ms - tl_0.seat_ms) < 1e-9)
+
+# 提前度过大（超过缩回起点角 12°）→ 钳制至 0°，不越到拾取之前
+cfg_x = make_cfg(install_delay=True)
+cfg_x.device.delay_advance_deg = 30.0
+tl_x = build_timeline(cfg_x, cfg_x.device)
+check("提前度数 30° > 缩回起点角 12° → 钳制至 0°（不崩、不为负时刻）",
+      tl_x.retract_deg == 0.0 and tl_x.window_start_deg == 20.0
+      and tl_x.retract_start_ms == 0.0)
+
+# 旧键 延时器占孔数 被接受但忽略（向后兼容，不再参与计算）
+cfg_old = load_config(json.loads(json.dumps(
+    {"电机": {"标称转速RPM": 30000}, "改装": {"安装延时器": True},
+     "器件参数覆盖": {"延时器占孔数": 5.0}})))
+tl_old = build_timeline(cfg_old, cfg_old.device)
+check("旧键 延时器占孔数 接受但忽略（仍按 提前0°/延时36° 计算）",
+      cfg_old.device.delay_device_holes == 5.0
+      and abs(tl_old.delay_ms - tl_old.period_ms / 10.0) < 1e-9)
+
+# 范围校验（负值 / 超 180°）
+try:
+    load_config(json.loads(json.dumps(
+        {"电机": {"标称转速RPM": 30000},
+         "器件参数覆盖": {"延时器提前度数": -5.0}})))
+    check("提前度数 -5 → 报错", False, "未报错")
+except ConfigError as e:
+    check("提前度数 -5 → 报错", "延时器提前度数" in str(e), str(e))
+try:
+    load_config(json.loads(json.dumps(
+        {"电机": {"标称转速RPM": 30000},
+         "器件参数覆盖": {"延时器延时度数": 200.0}})))
+    check("延时度数 200 → 报错", False, "未报错")
+except ConfigError as e:
+    check("延时度数 200 → 报错", "延时器延时度数" in str(e), str(e))
+
+# 事件表：缩回/窗口开始事件显示有效角（含提前）并在描述中注明提前量
+cfg_ev = make_cfg(install_delay=True)
+cfg_ev.device.delay_advance_deg = 6.0
+dev_ev = cfg_ev.device
+tl_ev = build_timeline(cfg_ev, dev_ev)
+d_ev = compute(cfg_ev, dev_ev, tl_ev)
+f_ev = evaluate(cfg_ev, tl_ev)
+b_ev = compute_ballistics(cfg_ev, dev_ev, tl_ev, d_ev)
+evs = sorted(events_list(cfg_ev, dev_ev, tl_ev, d_ev, f_ev, b_ev),
+             key=lambda e: e["t"])
+re_ev = [e for e in evs if e["desc"].startswith("推嘴开始缩回")][0]
+ws_ev = [e for e in evs if e["desc"].startswith("推嘴完全缩回")][0]
+check("事件表：缩回/窗口开始显示有效角（12°−6°=6°、50°−6°=44°）并注明提前",
+      abs(re_ev["angle"] - 6.0) < 1e-9
+      and abs(re_ev["t"] - tl_ev.retract_start_ms) < 1e-9
+      and "提前" in re_ev["desc"]
+      and abs(ws_ev["angle"] - 44.0) < 1e-9)
 
 print()
 if FAILS:
