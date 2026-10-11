@@ -52,6 +52,13 @@ DEFAULT_CONFIG = {
     "器件参数覆盖": _scalar_defaults(DEVICE_KEY_MAP, DeviceParams()),
     "判定阈值覆盖": _scalar_defaults(THRESHOLD_KEY_MAP, Thresholds()),
 }
+# ✅v0.9.6：派生参数不下发显式值——推嘴缩回起点角/完全缩回角/回位起始角/
+# 回位完成角均由「柱位角 − 接触提前角 / +40 / +60 / +160」在解析层派生
+# （✅v4.6 实测基准 + 柱位平移），预填显式值会使柱位平移派生失效（与
+# 弹簧预压mm 预填同类问题）；网页三个角度输入框留空 = 自动派生
+for _k in ("推嘴缩回起点角", "推嘴完全缩回角",
+           "推嘴回位起始角", "推嘴回位完成角"):
+    DEFAULT_CONFIG["器件参数覆盖"].pop(_k, None)
 
 
 # ---- 参数分区预设（✅v0.8.0 用户需求：分区下拉选择预设参数文件或自定义） ----
@@ -136,6 +143,7 @@ def simulate_payload(data: dict) -> dict:
             "return_margin_ms": bal.return_margin_ms,
             "seal_margin_ms": seal_margin_ms(tl, bal),
             "window_ms": feed.window_ms,
+            "nozzle_open_ms": feed.nozzle_open_ms,
             "feed_max_rps": cfg.feed_max_rps,
             "air_index": dyn.air_index, "t_fire_ms": bal.t_fire_ms,
             "energy_mj": dyn.energy_mj, "v_release_m_s": dyn.v_release_m_s,

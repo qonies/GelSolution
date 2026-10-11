@@ -20,7 +20,7 @@ class Dynamics:
     k_n_per_mm: float        # 弹簧刚度
     energy_mj: float         # 活塞释放点弹簧储能 (mJ)
     v_release_m_s: float     # 活塞释放初速度（气垫起作用前）
-    air_index: float         # 压气指数（行程比 × 气缸系数）
+    air_index: float         # 压气指数（min(行程比, 气缸系数)，水桶效应）
 
 
 def compute(cfg: SimConfig, dev: DeviceParams, tl: Timeline) -> Dynamics:

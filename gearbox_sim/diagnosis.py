@@ -159,7 +159,7 @@ def run_checks(cfg: SimConfig, dev: DeviceParams, tl, dyn, feed, bal) -> List[Ch
     # 6. 初速判定
     if bal.v_m_s > th.velocity_warn_ms:
         checks.append(Check("初速", LEVEL_WARN,
-                            "估算初速 %.1f m/s，超过警告阈值 %.0f m/s → 超过80m/s警告，注意安全与法规限制"
+                            "估算初速 %.1f m/s，超过警告阈值 %.0f m/s，注意安全与法规限制"
                             % (bal.v_m_s, th.velocity_warn_ms)))
     else:
         checks.append(Check("初速", LEVEL_OK,
@@ -267,11 +267,13 @@ def build_conclusion(cfg: SimConfig, best: SchemeRow, bal=None, tl=None) -> List
     hole_ms = (tl.period_ms / cfg.device.cam_hole_count
                if tl is not None and cfg.device.cam_hole_count else None)
     if cfg.install_delay:
-        out.append("延时器：已安装（缩回提前 %.1f ms / 回位推迟 %.1f ms，"
+        out.append("延时器：已配置（缩回提前 %.1f ms / 回位推迟 %.1f ms，"
                    "提前 %.0f° / 延时 %.0f°）—— 供蛋窗口加宽至 %.1f ms；"
-                   "注意气密裕量同步减小"
+                   "注意气密裕量同步减小%s"
                    % (tl.advance_ms, delay_ms, cfg.device.delay_advance_deg,
-                      cfg.device.delay_hold_deg, best.window_ms))
+                      cfg.device.delay_hold_deg, best.window_ms,
+                      "；✅已切拉桥旗：延时度数不生效（柱于最大幅度结束即脱离）"
+                      if cfg.cut_flag else ""))
     else:
         hole_note = ("延时默认 36° = 1 孔（每孔 ≈%.1f ms），"
                      "提前/延时度数可在器件参数覆盖中调整" % hole_ms) if hole_ms else ""
@@ -282,14 +284,15 @@ def build_conclusion(cfg: SimConfig, best: SchemeRow, bal=None, tl=None) -> List
                    % (best.window_ms, cfg.feed_mode, cfg.feed_max_rps, hole_note))
 
     # 3) 切拉桥旗（已切则评估效果；未切则按气密裕量建议）
-    # 语义：切掉拉桥旗槽 S 形曲线的缓冲尾 → 推嘴更早、更快恢复闭合；
-    #       需搭配更强拉桥簧，否则实际气密时刻会晚于几何提前量
+    # 语义（✅v4.5 用户澄清）：切旗 = 拉桥旗维持到最大幅度结束后拉桥柱即
+    #       完全脱离（停留段保留、S 形缓冲恢复段切除）→ 推嘴由强拉桥簧快速
+    #       回位、更早密闭；需搭配更强拉桥簧，否则实际气密时刻会晚于估算
     flag_ms = cfg.device.flag_cut_advance_ms if cfg.cut_flag else 0.0
     flag_note = "（需搭配更强拉桥簧，否则实际恢复会慢于估算）"
     if cfg.cut_flag:
         if best.seal_margin_ms >= th.air_seal_margin_ms:
-            out.append("切拉桥旗：已切（S 尾切除，推嘴提前 %.1f ms 回位且恢复更快）—— "
-                       "气密裕量 %.1f ms，回位时序正常%s"
+            out.append("切拉桥旗：已切（拉桥柱于最大幅度结束即脱离，缓冲恢复段切除、"
+                       "推嘴由强拉桥簧快速回位，气密就位提前 %.1f ms）—— 气密裕量 %.1f ms，回位时序正常%s"
                        % (flag_ms, best.seal_margin_ms, flag_note))
         else:
             out.append("切拉桥旗：已切但气密裕量仍为 %.1f ms（要求 ≥ %.1f ms）—— "
@@ -298,7 +301,7 @@ def build_conclusion(cfg: SimConfig, best: SchemeRow, bal=None, tl=None) -> List
                        % (best.seal_margin_ms, th.air_seal_margin_ms))
     elif best.seal_margin_ms < th.air_seal_margin_ms:
         out.append("是否需要切拉桥旗：建议切 —— 推嘴回位偏晚（气密裕量 %.1f ms < %.1f ms），"
-                   "切掉 S 形缓冲尾可使推嘴更早更快恢复闭合；也可改用更少后切齿数；"
+                   "切掉 S 形缓冲尾后拉桥柱在最大幅度结束即脱离、推嘴由强拉桥簧快速回位更早密闭；"
                    "注意需搭配更强拉桥簧"
                    % (best.seal_margin_ms, th.air_seal_margin_ms))
     else:

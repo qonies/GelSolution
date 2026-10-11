@@ -16,10 +16,16 @@ from .timing import Timeline
 class FeedResult:
     mode: str           # 供蛋方式
     max_rps: float      # 该方式供蛋能力上限 (发/秒，实际支持发射的能力)
-    window_ms: float    # 实际供蛋窗口（推嘴完全缩回 → 开始回位；时序信息）
+    window_ms: float    # 供蛋窗口（最大开度停留期：完全缩回 → 开始回位；时序信息；
+                        # 无停留齿轮箱下为 0 属实；✅v4.5 切旗保留停留期——
+                        # 脱离于最大幅度结束）
+    nozzle_open_ms: float  # 喷嘴未密闭时段（推嘴开始缩回 → 气密就位；
+                        # ✅v4.4 新增指标：回位过程喷嘴仍开着，对无停留齿轮箱
+                        # 与切旗状态仍有意义）
 
 
 def evaluate(cfg: SimConfig, tl: Timeline) -> FeedResult:
     window = tl.window_end_ms - tl.window_start_ms
+    nozzle_open = tl.seat_ms - tl.retract_start_ms
     return FeedResult(mode=cfg.feed_mode, max_rps=cfg.feed_max_rps,
-                      window_ms=window)
+                      window_ms=window, nozzle_open_ms=nozzle_open)

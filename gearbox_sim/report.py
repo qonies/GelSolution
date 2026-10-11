@@ -52,7 +52,7 @@ def events_list(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn: Dynamics,
         retract_desc += "（延时器提前 %.0f°）" % dev.delay_advance_deg
     if next_retract_ms < tl.next_pickup_ms - 1e-9:
         last = {"t": next_retract_ms, "angle": tl.retract_deg + 360,
-                "desc": "下一循环推嘴开始缩回（前切：早于下一循环拾取 %.2f ms；%s）"
+                "desc": "下一循环推嘴开始缩回（早于下一循环拾取 %.2f ms；%s）"
                         % (tl.next_pickup_ms - next_retract_ms, margin_note)}
     elif next_retract_ms > tl.next_pickup_ms + 1e-9:
         last = {"t": tl.next_pickup_ms, "angle": tl.pickup_deg + 360,
@@ -122,13 +122,15 @@ def render(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn: Dynamics,
              % (feed.mode, feed.max_rps))
     mods = []
     if cfg.install_delay:
-        mods.append("已安装延时器（提前 %.0f° / 延时 %.0f°：缩回提前 %.1f ms、"
+        mods.append("已配置延时器（提前 %.0f° / 延时 %.0f°：缩回提前 %.1f ms、"
                     "回位推迟 %.1f ms）"
                     % (dev.delay_advance_deg, dev.delay_hold_deg,
                        tl.advance_ms, tl.delay_ms))
     if cfg.cut_flag:
-        mods.append("已切拉桥旗（S 形缓冲尾切除：回位提前 %.1f ms 且更快恢复；"
-                    "需搭配更强拉桥簧）" % dev.flag_cut_advance_ms)
+        mods.append("已切拉桥旗（✅拉桥旗维持到最大幅度结束后脱离：停留段保留、"
+                    "S 形缓冲恢复段切除，推嘴由强拉桥簧快速回位，气密就位提前 "
+                    "%.1f ms；需搭配更强拉桥簧）"
+                    % dev.flag_cut_advance_ms)
     L.append("改装件       : %s" % ("；".join(mods) if mods else "无"))
     if tl.batt_sag is not None:
         L.append("电池         : %s；理论续航约 %.0f 发"
@@ -159,6 +161,8 @@ def render(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn: Dynamics,
              % (bal.v_m_s, bal.energy_j,
                 " ← 超过 %.0f m/s 警告阈值！" % cfg.threshold.velocity_warn_ms
                 if bal.v_m_s > cfg.threshold.velocity_warn_ms else ""))
+    L.append("供弹窗口     : 最大开度 %.1f ms（完全缩回→开始回位）/ 喷嘴未密闭 %.1f ms（开始缩回→气密就位）"
+             % (feed.window_ms, feed.nozzle_open_ms))
 
     L.append("")
     L.append("---------- 循环事件表 ----------")
@@ -189,7 +193,7 @@ def render(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn: Dynamics,
         L.append("      判定偏严苛。选择电机型号后按 CHAOLI 性能曲线计算负载转速。")
     L.append("提示：本报告为简化模型的数据模拟；以下器件参数为估算值，"
              "结论精度依赖校准：")
-    L.append("      弹簧刚度表、弹簧预压、活塞质量/行程、气缸内径、凸轮槽角度、"
+    L.append("      弹簧刚度表、弹簧预压、活塞质量/行程、气缸内径、"
              "余隙容积、撞击回弹系数。")
     L.append("      实测后通过「器件参数覆盖」修正，或用实测初速反标「气动效率」。")
     return "\n".join(L)

@@ -4,7 +4,9 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from .components import (DeviceParams, Thresholds, apply_overrides,
-                         DEVICE_KEY_MAP, THRESHOLD_KEY_MAP)
+                         DEVICE_KEY_MAP, THRESHOLD_KEY_MAP,
+                         CAM_MAX_START_OFF_DEG, CAM_MAX_END_OFF_DEG,
+                         CAM_DETACH_OFF_DEG)
 from .motor import MOTOR_MODELS, MOTOR_CURVES
 
 VALID_RATIOS = {"13:1": 13.0, "16:1": 16.0, "18:1": 18.0}
@@ -33,7 +35,9 @@ class SimConfig:
     batt_cells: Optional[int] = None      # 电池电芯数（2S=2, 3S=3, 4S=4；曲线模式生效）
     batt_capacity_mah: Optional[float] = None  # 电池容量 mAh
     batt_c_rate: Optional[float] = None   # 放电倍率 C
-    install_delay: bool = False           # 是否安装延时器（推迟推嘴回位，加宽供蛋窗口）
+    install_delay: bool = False           # 【派生】是否已配置延时器（✅v4.7 参数直接生效：
+                                          # 提前/延时度数非零即视为已安装；旧键
+                                          # 改装.安装延时器 已废弃，接受但忽略）
     cut_flag: bool = False                # 是否切拉桥旗（推嘴提前回位）
     ratio: str = "13:1"                   # 齿轮比（默认 13:1）
     front_cut: int = 0                    # 前切齿数（推迟活塞拾取）
@@ -141,7 +145,7 @@ def load_config(data: dict) -> SimConfig:
     else:
         batt_cells = batt_cap = batt_c = None
 
-    # 改装件（可选布尔开关）
+    # 改装件（可选布尔开关；✅v4.7 安装延时器 开关已废弃——延时器参数直接生效）
     mods = data.get("改装") or {}
     install_delay = mods.get("安装延时器", False)
     cut_flag = mods.get("切拉桥旗", False)
@@ -237,13 +241,35 @@ def load_config(data: dict) -> SimConfig:
         raise ConfigError("开孔段保留系数 必须是 0~1 的数字"
                           "（0=开孔段全漏，1=完全不漏），实际为: %r" % port_ret)
 
-    # 拉桥柱位置（✅v4.3）：未显式覆盖 推嘴缩回起点角 时，缩回起点角按
-    # 「拉桥柱位置 × 每齿扇齿角」派生（第 1 颗齿下方 = 0 → 拾取角 0° 即缩回，
-    # 负值 = 拾取前）；显式覆盖 推嘴缩回起点角 优先（拉桥柱位置不参与计算）
+    # 拉桥柱位置（✅v4.3/v4.6）：凸轮槽全部事件角以柱位角 = 拉桥柱位置 × 每齿角
+    # 为基准平移派生（✅v4.6 实测：常规拉桥旗时序对同柱位齿轮通用，柱位不同
+    # 按柱位角平移，基准 docs/齿轮测试-1.txt）——未显式覆盖时：
+    #   缩回起点角 = 柱位角 − 拉桥旗接触提前角（默认 30° → 柱位0 = −30°）
+    #   完全缩回角 = 柱位角 + 40°（最大幅度开始，供蛋窗口开始）
+    #   回位起始角 = 柱位角 + 60°（最大幅度结束，供蛋窗口结束）
+    #   回位完成角 = 柱位角 + 160°（柱旗脱离，气密就位）
+    # 显式覆盖任一角则该角优先（其余仍按柱位角派生）
     dev_over = data.get("器件参数覆盖") or {}
+    pillar_deg = cfg.device.cam_pillar_tooth * cfg.device.sector_pitch_deg
     if "推嘴缩回起点角" not in dev_over:
-        cfg.device.cam_retract_start_deg = (cfg.device.cam_pillar_tooth
-                                            * cfg.device.sector_pitch_deg)
+        cfg.device.cam_retract_start_deg = (pillar_deg
+                                            - cfg.device.flag_contact_advance_deg)
+    if "推嘴完全缩回角" not in dev_over:
+        cfg.device.cam_retract_end_deg = pillar_deg + CAM_MAX_START_OFF_DEG
+    if "推嘴回位起始角" not in dev_over:
+        cfg.device.cam_return_start_deg = pillar_deg + CAM_MAX_END_OFF_DEG
+    if "推嘴回位完成角" not in dev_over:
+        cfg.device.cam_return_end_deg = pillar_deg + CAM_DETACH_OFF_DEG
+
+    # 延时器（✅v4.7 参数直接生效）：提前/延时度数非零即视为已安装延时器并
+    # 直接影响供弹窗口（提前 → 窗口开始提前、延时 → 窗口结束推迟，无需
+    # 安装开关）；旧键 改装.安装延时器 已废弃（接受但忽略）——兼容：开关=true
+    # 且未显式配置 延时器延时度数 → 按旧默认 36°（=原 1 孔口径）处理；
+    # 显式配置的度数（含 0）优先于兼容规则
+    if install_delay and "延时器延时度数" not in dev_over:
+        cfg.device.delay_hold_deg = 36.0
+    cfg.install_delay = (cfg.device.delay_advance_deg > 0.0
+                         or cfg.device.delay_hold_deg > 0.0)
 
     # 弹簧预压一致性（v0.6.7）：预压未显式覆盖时按「自由长度 − 装配长度」派生，
     # 避免只覆盖长度参数后预压与报告显示不一致；显式覆盖的预压优先
