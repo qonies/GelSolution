@@ -1148,13 +1148,22 @@ check("切旗：回位完成 = 导向回位完成 − 切拉桥旗提前ms（下
       abs(tlcut.seat_ms - max(tlbase.seat_ms - cfgcut.device.flag_cut_advance_ms,
                               tlcut.window_end_ms)) < 1e-6
       and tlcut.seat_ms >= tlcut.window_end_ms - 1e-9)
-# 切旗 + 延时器：延时度数不生效（柱于最大幅度结束即脱离）、提前度数仍生效
+# 切旗 + 延时器：延时度数仍生效（✅v4.8 柱维持至最大幅度结束+延时度数才脱离）、提前度数仍生效
 cfgdc = make_cfg(install_delay=True, cut_flag=True)
 cfgdc.device.delay_hold_deg = 72.0
 tldc = build_timeline(cfgdc, cfgdc.device)
-check("切旗 + 延时器：延时度数不生效（回位推迟 = 0、窗口 = 未装延时器窗口）",
-      tldc.delay_ms == 0.0
-      and abs(tldc.window_end_ms - tlbase.window_end_ms) < 1e-9)
+check("切旗 + 延时器：延时度数仍生效（✅v4.8 柱维持至最大幅度结束+延时度数才脱离）",
+      tldc.delay_ms > 0.0
+      and abs(tldc.delay_ms - 72.0 * tlbase.period_ms / 360.0) < 1e-6
+      and abs(tldc.window_end_deg - 132.0) < 1e-9)
+cfgd_nc = make_cfg(install_delay=True)
+cfgd_nc.device.delay_hold_deg = 72.0
+tldc_nc = build_timeline(cfgd_nc, cfgd_nc.device)
+check("切旗不影响最大供弹窗口：切旗+延时 72° 窗口 = 未切旗+延时 72° 窗口（仅气密提前）",
+      abs(tldc.window_end_ms - tldc_nc.window_end_ms) < 1e-9
+      and abs((tldc.window_end_ms - tldc.window_start_ms)
+              - (tldc_nc.window_end_ms - tldc_nc.window_start_ms)) < 1e-9
+      and tldc.seat_ms < tldc_nc.seat_ms)
 cfgdc2 = make_cfg(install_delay=True, cut_flag=True)
 cfgdc2.device.delay_advance_deg = 6.0
 tldc2 = build_timeline(cfgdc2, cfgdc2.device)

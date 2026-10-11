@@ -137,7 +137,7 @@ def build_timeline(cfg: SimConfig, dev: DeviceParams) -> Timeline:
     #         推迟该角度（供蛋窗口加宽、气密就位更晚）。提前/推迟量按所在弧段
     #         转速换算 ms。旧「延时器占孔数」几何模型弃用（36°/孔，默认延时
     #         36° = 原 1 孔口径，装延时器默认行为与旧模型等价；旧键接受但忽略）。
-    #         切拉桥旗：脱离于最大幅度结束（停留段保留、窗口不收窄），S 形缓冲恢复段切除 → 回位完成提前（气密更早就位）
+    #         切拉桥旗：脱离于最大幅度结束+延时度数（停留段保留并随延时加宽窗口），S 形缓冲恢复段切除 → 回位完成提前（气密更早就位）
     adv_deg = dev.delay_advance_deg     # ✅v4.7 参数直接生效：度数非零即视为已安装
     hold_deg = dev.delay_hold_deg       # 延时器（无需安装开关；旧开关废弃，见 params）
     retract_deg = dev.cam_retract_start_deg - adv_deg
@@ -145,25 +145,21 @@ def build_timeline(cfg: SimConfig, dev: DeviceParams) -> Timeline:
     retract_start_ms = _t(retract_deg)
     window_start_ms = _t(wstart_deg)
 
-    # 切拉桥旗（✅v4.5 用户澄清语义）：拉桥旗打开到最大幅度并**维持到最大幅度
-    # 结束**后才完全脱离拉桥柱——停留段保留（回位起始 = 最大幅度结束角
-    # cam_return_start_deg，供蛋窗口不收窄）；脱离后推嘴不受拉桥柱缓冲，
-    # 直接由强力拉桥簧快速归位 → S 形缓冲恢复段切除，回位完成 = 导向回位
-    # 完成 − 切拉桥旗提前ms（自由回位更快的估算旋钮），下限保护不早于回位
-    # 起始；延时器延时度数在切旗后无法继续拉住推嘴、不再生效（提前度数仍生效）
+    # 切拉桥旗（✅v4.5 用户澄清语义；✅v4.8 延时度数切旗下仍生效）：拉桥旗打开
+    # 到最大幅度并**维持到最大幅度结束（+延时器延时度数）**后才完全脱离拉桥柱
+    # ——停留段保留且随延时度数加宽（回位起始 = 最大幅度结束角 + 延时度数，
+    # 供蛋窗口不收窄、随延时加宽）；脱离后推嘴不受拉桥柱缓冲，直接由强力拉桥
+    # 簧快速归位 → S 形缓冲恢复段切除，回位完成 = 导向回位完成（含延时）−
+    # 切拉桥旗提前ms（自由回位更快的估算旋钮），下限保护不早于回位起始；
+    # 延时器提前度数照常生效
     flag_ms = dev.flag_cut_advance_ms if cfg.cut_flag else 0.0
+    window_end_deg = min(dev.cam_return_start_deg + hold_deg, 359.999)
+    seat_deg = min(dev.cam_return_end_deg + hold_deg, 359.999)
+    window_end_ms = _t(window_end_deg)
+    seat_ms = _t(seat_deg)
     if cfg.cut_flag:
-        window_end_deg = min(dev.cam_return_start_deg, 359.999)
-        window_end_ms = _t(window_end_deg)
-        seat_deg = min(dev.cam_return_end_deg, 359.999)
-        seat_ms = max(_t(seat_deg) - flag_ms, window_end_ms)
-        delay_ms = 0.0
-    else:
-        window_end_deg = min(dev.cam_return_start_deg + hold_deg, 359.999)
-        seat_deg = min(dev.cam_return_end_deg + hold_deg, 359.999)
-        window_end_ms = _t(window_end_deg)
-        seat_ms = _t(seat_deg)
-        delay_ms = _t(seat_deg) - _t(dev.cam_return_end_deg)
+        seat_ms = max(seat_ms - flag_ms, window_end_ms)
+    delay_ms = _t(seat_deg) - _t(dev.cam_return_end_deg)
     advance_ms = _t(dev.cam_retract_start_deg) - _t(retract_deg)
 
     next_pickup_ms = period_ms + pickup_ms

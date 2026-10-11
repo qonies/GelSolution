@@ -272,7 +272,7 @@ def build_conclusion(cfg: SimConfig, best: SchemeRow, bal=None, tl=None) -> List
                    "注意气密裕量同步减小%s"
                    % (tl.advance_ms, delay_ms, cfg.device.delay_advance_deg,
                       cfg.device.delay_hold_deg, best.window_ms,
-                      "；✅已切拉桥旗：延时度数不生效（柱于最大幅度结束即脱离）"
+                      "；✅已切拉桥旗：延时度数仍生效（柱维持至最大幅度结束+延时度数才脱离）"
                       if cfg.cut_flag else ""))
     else:
         hole_note = ("延时默认 36° = 1 孔（每孔 ≈%.1f ms），"
@@ -291,7 +291,7 @@ def build_conclusion(cfg: SimConfig, best: SchemeRow, bal=None, tl=None) -> List
     flag_note = "（需搭配更强拉桥簧，否则实际恢复会慢于估算）"
     if cfg.cut_flag:
         if best.seal_margin_ms >= th.air_seal_margin_ms:
-            out.append("切拉桥旗：已切（拉桥柱于最大幅度结束即脱离，缓冲恢复段切除、"
+            out.append("切拉桥旗：已切（拉桥柱于最大幅度结束+延时度数才脱离，缓冲恢复段切除、"
                        "推嘴由强拉桥簧快速回位，气密就位提前 %.1f ms）—— 气密裕量 %.1f ms，回位时序正常%s"
                        % (flag_ms, best.seal_margin_ms, flag_note))
         else:
