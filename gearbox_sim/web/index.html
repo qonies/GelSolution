@@ -95,6 +95,8 @@ tr.hl td{background:#eaf1ff}
       <div><label>前切齿数（切蛋糕齿）</label><input type="number" id="fc" min="0" max="6" step="1" value="0"></div>
       <div><label>后切齿数</label><input type="number" id="rc" min="0" max="6" step="1" value="0"></div>
     </div>
+    <div class="group"><label>拉桥柱位置（✅在哪一颗齿下方：第 1 颗齿 = 0，可小数如 0.5、负数如 −2 = 拾取前；缩回起点角 = 位置 × 每齿角，默认 0 = 拾取即开始缩回）</label>
+      <input type="number" id="dvPillar" step="0.5"></div>
   </div>
 
   <div class="psec">
@@ -255,7 +257,7 @@ function collect(){
   const devMap={"dvEff":"气动效率","dvMass":"水弹质量g","dvBore":"气缸内径mm","dvCylLen":"气缸长度mm",
                 "dvPortRet":"开孔段保留系数","dvResti":"撞击回弹系数",
                 "dvDead":"气缸余隙容积cm3","dvPreload":"弹簧预压mm","dvLeak":"泄气损失系数",
-                "dvStroke":"活塞满行程mm","dvTappet":"天梯齿数","dvPistonMass":"活塞质量g",
+                "dvStroke":"活塞满行程mm","dvTappet":"天梯齿数","dvPistonMass":"活塞质量g","dvPillar":"拉桥柱位置",
                 "dvRetS":"推嘴回位起始角","dvRetE":"推嘴回位完成角",
                 "dvDelayAdv":"延时器提前度数","dvDelayHold":"延时器延时度数",
                 "dvFlag":"切拉桥旗提前ms"};
@@ -294,7 +296,7 @@ function applyConfig(c){
   const revDev={"气动效率":"dvEff","水弹质量g":"dvMass","气缸内径mm":"dvBore","气缸长度mm":"dvCylLen",
                 "开孔段保留系数":"dvPortRet","撞击回弹系数":"dvResti",
                 "气缸余隙容积cm3":"dvDead","弹簧预压mm":"dvPreload","泄气损失系数":"dvLeak",
-                "活塞满行程mm":"dvStroke","天梯齿数":"dvTappet","活塞质量g":"dvPistonMass",
+                "活塞满行程mm":"dvStroke","天梯齿数":"dvTappet","活塞质量g":"dvPistonMass","拉桥柱位置":"dvPillar",
                 "推嘴回位起始角":"dvRetS","推嘴回位完成角":"dvRetE",
                 "延时器提前度数":"dvDelayAdv","延时器延时度数":"dvDelayHold",
                 "切拉桥旗提前ms":"dvFlag"};
@@ -429,6 +431,7 @@ function applyPreset(sec,name){
     $("fc").value=(m["前切齿数"]!=null)?m["前切齿数"]:0;
     $("rc").value=(m["后切齿数"]!=null)?m["后切齿数"]:0;
     $("dvTappet").value=(m["天梯齿数"]!=null)?m["天梯齿数"]:devDef("天梯齿数");
+    $("dvPillar").value=(m["拉桥柱位置"]!=null)?m["拉桥柱位置"]:devDef("拉桥柱位置");
   }else if(sec==="电池"){
     $("battCells").value=(m["电芯数"]!=null)?String(m["电芯数"]):"";
     $("battCap").value=(m["容量mAh"]!=null)?m["容量mAh"]:"";
@@ -489,7 +492,7 @@ function bind(){
   for(const id of ["battCells","battCap","battC","modDelay","modFlag","ratio","cyl","spring","feedMode","fc","rc","bore","ball",
                    "thClash","thSeal","thV","thBarrel","thAir","thTeeth",
                    "dvEff","dvMass","dvBore","dvCylLen","dvDead","dvPortRet","dvLeak","dvStroke",
-                   "dvTappet","dvPistonMass","dvPreload","dvResti","dvRetS","dvRetE",
+                   "dvTappet","dvPillar","dvPistonMass","dvPreload","dvResti","dvRetS","dvRetE",
                    "dvDelayAdv","dvDelayHold","dvFlag"])
     $(id).addEventListener("input",schedule);
   $("btnSim").addEventListener("click",simulate);
@@ -514,7 +517,7 @@ function bind(){
     });
   }
   const SEC_INPUTS={"电机":["motorModel","rpm","rpmS","lf","lfS"],
-                    "齿轮":["ratio","fc","rc","dvTappet"],
+                    "齿轮":["ratio","fc","rc","dvTappet","dvPillar"],
                     "电池":["battCells","battCap","battC"],
                     "气缸":["cyl","dvBore","dvCylLen","dvDead","dvPortRet"],
                     "弹簧":["spring","dvPreload","dvStroke","dvPistonMass","dvResti"]};

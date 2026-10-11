@@ -42,9 +42,9 @@ def _scheme_table(rows):
 def events_list(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn: Dynamics,
                 feed: FeedResult, bal: Ballistics):
     """单循环事件列表（文本报告与网页界面共用）。"""
-    # 单循环终点 = 下一循环首个事件（✅v3.5：推嘴缩回起点角固定于扇齿（拾取
-    # +1 齿距 = 12°），前切 n≥2 时下一循环推嘴缩回早于下一循环活塞拾取，
-    # 不能固定为拾取）
+    # 单循环终点 = 下一循环首个事件（✅v3.5，✅v4.3 口径更新：缩回起点角 =
+    # 拉桥柱位置 × 每齿角，默认 0° = 拾取角——无前切时下一循环拾取与缩回重合，
+    # 前切 n≥1 或拉桥柱位置 > 拾取角时先后关系按实际时刻比较，不能固定为拾取）
     margin_note = "回位裕量 %.2f ms" % bal.return_margin_ms
     next_retract_ms = tl.period_ms + tl.retract_start_ms
     retract_desc = "推嘴开始缩回"
@@ -59,7 +59,7 @@ def events_list(cfg: SimConfig, dev: DeviceParams, tl: Timeline, dyn: Dynamics,
                 "desc": "下一循环活塞拾取（%s）" % margin_note}
     else:
         last = {"t": tl.next_pickup_ms, "angle": tl.pickup_deg + 360,
-                "desc": "下一循环活塞拾取 = 推嘴开始缩回（前切1，两者重合；%s）"
+                "desc": "下一循环活塞拾取 = 推嘴开始缩回（两者重合；%s）"
                         % margin_note}
     return [
         {"t": tl.pickup_ms, "angle": tl.pickup_deg, "desc": "活塞拾取，开始被拉动"},

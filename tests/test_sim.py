@@ -367,9 +367,9 @@ check("延时器默认延时 36°（=原 1 孔口径）= 周期×1/10",
       "delay=%.2f ms (T=%.1f ms)" % (tl.delay_ms, tl0.period_ms))
 check("气密裕量随延时器等量减小",
       abs((b0.p_rise_ms - tl0.seat_ms) - (bal.p_rise_ms - tl.seat_ms) - tl.delay_ms) < 1e-6)
-check("拉桥柱几何：推嘴开始缩回 = 第2齿接触天梯（拾取+1齿距）",
-      abs(make_cfg().device.cam_retract_start_deg
-          - make_cfg().device.sector_pitch_deg) < 1e-9)
+check("拉桥柱几何：缩回起点角 = 拉桥柱位置 0（第1齿下方）× 每齿角 = 0°（拾取即缩回）",
+      make_cfg().device.cam_pillar_tooth == 0.0
+      and make_cfg().device.cam_retract_start_deg == 0.0)
 
 tl, dyn, feed, bal, checks = full(make_cfg(cut_flag=True))
 check("切拉桥旗提前推嘴回位完成", tl.seat_ms < tl0.seat_ms)
@@ -476,14 +476,15 @@ check("报告含内管/水弹配置行", "内管/水弹" in text and "水弹出�
 # ---- 12. v0.5.9 回归：事件表时刻 / 默认管径 / 曲线模式RPM可省 / 退化哨兵 ----
 cfg = make_cfg()
 tl = build_timeline(cfg, cfg.device)
-check("推嘴缩回起点时刻 = 12°×空转ms/°（非硬编码 0；拾取+1 齿距 = 12°）",
-      abs(tl.retract_start_ms - 12.0 * tl.period_ms / 360.0) < 1e-9,
+check("推嘴缩回起点时刻 = 缩回起点角 × 空转ms/°（✅v4.3 拉桥柱位置 0 → 拾取即缩回）",
+      tl.retract_start_ms == 0.0,
       "t=%.2fms" % tl.retract_start_ms)
 tl, dyn, feed, bal, checks = full(make_cfg())
 ev = [e for e in events_list(cfg, cfg.device, tl, dyn, feed, bal)
       if e["desc"].startswith("推嘴开始缩回")][0]
-check("事件表推嘴缩回时刻与角度一致（晚于拾取）",
-      abs(ev["t"] - tl.retract_start_ms) < 1e-9 and ev["t"] > tl.pickup_ms,
+check("事件表推嘴缩回时刻与角度一致（缩回起点 = 拾取角，两者重合）",
+      abs(ev["t"] - tl.retract_start_ms) < 1e-9
+      and abs(ev["t"] - tl.pickup_ms) < 1e-9,
       "t=%.2fms" % ev["t"])
 
 cfg = load_config(json.loads(json.dumps({"电机": {"标称转速RPM": 30000}})))
@@ -811,8 +812,8 @@ check("旧配置 最小供蛋时间ms 被接受并忽略（不再参与判定）
       cfg.feed_mode == "普通波轮")
 
 # ---- 22. v0.7.2 回归：单循环时序终点 = 下一循环首个事件 ----
-# 推嘴缩回起点角固定于扇齿（拾取+1 齿距 = 12°）：前切 n≥2 时下一循环推嘴缩回早于下一循环
-# 活塞拾取，时序终点不能固定为拾取
+# ✅v4.3：缩回起点角 = 拉桥柱位置 × 每齿角（默认 0° = 拾取角）——前切 n≥1 时
+# 拾取角后移，下一循环推嘴缩回早于下一循环活塞拾取，终点不能固定为拾取
 def _evs(**kw):
     cfg = make_cfg(**kw)
     dev = cfg.device
@@ -824,8 +825,9 @@ def _evs(**kw):
 
 
 tl0, evs0 = _evs()
-check("无前切：时序终点 = 下一循环活塞拾取",
+check("无前切（拉桥柱位置 0 = 拾取角）：下一循环拾取与缩回重合，终点 = 下一循环活塞拾取",
       evs0[-1]["desc"].startswith("下一循环活塞拾取")
+      and "重合" in evs0[-1]["desc"]
       and abs(evs0[-1]["t"] - tl0.next_pickup_ms) < 1e-9)
 tl2, evs2 = _evs(front_cut=2)
 check("前切2：本循环推嘴开始缩回早于活塞拾取（排序正确）",
@@ -836,9 +838,10 @@ check("前切2：时序终点 = 下一循环推嘴开始缩回（早于下一循
       and abs(evs2[-1]["t"] - (tl2.period_ms + tl2.retract_start_ms)) < 1e-9
       and evs2[-1]["t"] < tl2.next_pickup_ms - 1e-9)
 tl1, evs1 = _evs(front_cut=1)
-check("前切1：拾取与缩回重合，终点描述含「重合」",
-      "重合" in evs1[-1]["desc"]
-      and abs(evs1[-1]["t"] - tl1.next_pickup_ms) < 1e-9)
+check("前切1：下一循环推嘴缩回早于下一循环拾取（缩回 0° < 拾取 12°）",
+      evs1[-1]["desc"].startswith("下一循环推嘴开始缩回")
+      and abs(evs1[-1]["t"] - (tl1.period_ms + tl1.retract_start_ms)) < 1e-9
+      and evs1[-1]["t"] < tl1.next_pickup_ms - 1e-9)
 check("三种前切的终点时刻均不早于周期（下一循环事件）",
       evs0[-1]["t"] >= tl0.period_ms - 1e-9
       and evs1[-1]["t"] >= tl1.period_ms - 1e-9
@@ -904,13 +907,14 @@ check("结论层防护：孔数 0 时报告正常生成（无「每孔」换算�
 # 满拉弧 = 16 齿 × 12° = 192°（全部 16 齿参与咬合，拉满行程扇齿转 192°）
 cfg = make_cfg()
 d = cfg.device
-check("每齿角默认 12°（15 齿距占 180°，原 11.25° 有误）",
-      d.sector_pitch_deg == 12.0 and d.cam_retract_start_deg == 12.0)
+check("每齿角默认 12°（15 齿距占 180°）；拉桥柱位置 0 → 缩回起点角 0°（旧 12° 锚点废弃）",
+      d.sector_pitch_deg == 12.0 and d.cam_pillar_tooth == 0.0
+      and d.cam_retract_start_deg == 0.0)
 tl = build_timeline(cfg, d)
 check("无切满拉弧 = 16×12 = 192°（拾取 0° / 释放 192°）",
       tl.pickup_deg == 0.0 and abs(tl.release_deg - 192.0) < 1e-9)
-check("凸轮缩回起点 = 拾取 + 1 齿距（12°）且早于回位起始（144.4°）",
-      abs(tl.retract_start_ms - 12.0 / 360.0 * tl.period_ms) < 1e-9
+check("凸轮缩回起点 = 拾取角 0°（拾取即缩回）且早于回位起始（144.4°）",
+      tl.retract_deg == 0.0 and tl.retract_start_ms == 0.0
       and d.cam_return_start_deg > d.cam_retract_start_deg)
 cfgc = make_cfg(motor_model="超力有刷3W5")
 tlc = build_timeline(cfgc, cfgc.device)
@@ -958,13 +962,13 @@ check("未安装延时器 → 提前/延时度数均不生效",
       and abs(tl_n.window_start_ms - tl_0.window_start_ms) < 1e-9
       and abs(tl_n.seat_ms - tl_0.seat_ms) < 1e-9)
 
-# 提前度过大（超过缩回起点角 12°）→ 钳制至 0°，不越到拾取之前
+# ✅v4.3：提前度数不再钳制 0°——拉桥柱位置可负，缩回允许早于拾取（负角度/负时刻）
 cfg_x = make_cfg(install_delay=True)
 cfg_x.device.delay_advance_deg = 30.0
 tl_x = build_timeline(cfg_x, cfg_x.device)
-check("提前度数 30° > 缩回起点角 12° → 钳制至 0°（不崩、不为负时刻）",
-      tl_x.retract_deg == 0.0 and tl_x.window_start_deg == 20.0
-      and tl_x.retract_start_ms == 0.0)
+check("提前度数 30° → 缩回提前至 −30°（拾取前，负角度/负时刻），窗口开始 50−30=20°",
+      tl_x.retract_deg == -30.0 and tl_x.window_start_deg == 20.0
+      and abs(tl_x.retract_start_ms + 30.0 * tl_x.period_ms / 360.0) < 1e-9)
 
 # 旧键 延时器占孔数 被接受但忽略（向后兼容，不再参与计算）
 cfg_old = load_config(json.loads(json.dumps(
@@ -1003,11 +1007,55 @@ evs = sorted(events_list(cfg_ev, dev_ev, tl_ev, d_ev, f_ev, b_ev),
              key=lambda e: e["t"])
 re_ev = [e for e in evs if e["desc"].startswith("推嘴开始缩回")][0]
 ws_ev = [e for e in evs if e["desc"].startswith("推嘴完全缩回")][0]
-check("事件表：缩回/窗口开始显示有效角（12°−6°=6°、50°−6°=44°）并注明提前",
-      abs(re_ev["angle"] - 6.0) < 1e-9
+check("事件表：缩回/窗口开始显示有效角（0°−6°=−6°、50°−6°=44°）并注明提前",
+      abs(re_ev["angle"] - (-6.0)) < 1e-9
       and abs(re_ev["t"] - tl_ev.retract_start_ms) < 1e-9
       and "提前" in re_ev["desc"]
       and abs(ws_ev["angle"] - 44.0) < 1e-9)
+
+# ---- 27. v4.3 回归：拉桥柱位置（第 1 齿下方 = 0，缩回起点角 = 位置 × 每齿角）----
+cfg = make_cfg()
+check("默认 拉桥柱位置 0 → 缩回起点角 0°（拾取即缩回，旧「第2齿/12°」锚点废弃）",
+      cfg.device.cam_pillar_tooth == 0.0
+      and cfg.device.cam_retract_start_deg == 0.0)
+tlp0 = build_timeline(cfg, cfg.device)
+check("默认缩回时刻 = 0 ms（拾取角基准 0°）", tlp0.retract_start_ms == 0.0)
+
+
+def _pillar_tl(pos):
+    """拉桥柱位置用例：经解析层派生缩回起点角（配置镜像 make_cfg 标称参数）。"""
+    cfgp = load_config(json.loads(json.dumps(
+        {"电机": {"标称转速RPM": 30000, "负载系数": 1.0}, "齿轮比": "16:1",
+         "气缸类型": "70%", "弹簧": "M90", "内管长度mm": 350.0,
+         "器件参数覆盖": {"拉桥柱位置": pos}})))
+    return cfgp, build_timeline(cfgp, cfgp.device)
+
+
+cfgp1, tlp1 = _pillar_tl(1.0)
+check("拉桥柱位置 1（第 2 齿下方）→ 缩回起点角派生 12°（弧段换算，与旧锚点等价）",
+      abs(cfgp1.device.cam_retract_start_deg - 12.0) < 1e-9
+      and abs(tlp1.retract_start_ms - tlp0.period_ms * 12.0 / 360.0) < 1e-9)
+cfgp05, _ = _pillar_tl(0.5)
+check("拉桥柱位置 0.5（两齿之间）→ 缩回起点角派生 6°",
+      abs(cfgp05.device.cam_retract_start_deg - 6.0) < 1e-9)
+cfgpn, tlpn = _pillar_tl(-2.0)
+check("拉桥柱位置 −2 → 缩回起点角派生 −24°（拾取前，负时刻）",
+      abs(cfgpn.device.cam_retract_start_deg + 24.0) < 1e-9
+      and tlpn.retract_start_ms < 0.0)
+cfgpd = load_config(json.loads(json.dumps({"电机": {"标称转速RPM": 30000}})))
+check("解析-未配置拉桥柱位置 → 派生缩回起点角 0°（默认行为）",
+      cfgpd.device.cam_retract_start_deg == 0.0)
+cfgd = load_config(json.loads(json.dumps(
+    {"电机": {"标称转速RPM": 30000}, "器件参数覆盖": {"拉桥柱位置": 1.5}})))
+check("解析-拉桥柱位置 1.5 → 缩回起点角派生 18°（未覆盖缩回起点角时按位置派生）",
+      abs(cfgd.device.cam_retract_start_deg - 18.0) < 1e-9)
+cfgd2 = load_config(json.loads(json.dumps(
+    {"电机": {"标称转速RPM": 30000},
+     "器件参数覆盖": {"拉桥柱位置": 1.5, "推嘴缩回起点角": 30.0}})))
+check("显式覆盖 推嘴缩回起点角 优先于 拉桥柱位置派生",
+      cfgd2.device.cam_retract_start_deg == 30.0)
+e = _override_error({"拉桥柱位置": -100.0})
+check("拉桥柱位置 超范围（−100）→ 中文报错", e is not None and "拉桥柱位置" in e, e)
 
 # ---- 26. v0.9.2 回归：负载系数范围校验（0.1~1.0，与 FR-02 / 网页输入框对齐）----
 for _bad in (1.5, 0.05, -0.2):

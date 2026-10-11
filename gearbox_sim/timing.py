@@ -39,8 +39,9 @@ class Timeline:
     stroke_mm: float        # 活塞拉控行程
     stroke_ratio: float     # 行程 / 满行程
     pickup_ms: float        # 本循环活塞拾取时刻
-    retract_deg: float      # 推嘴开始缩回有效角（含延时器提前度数钳制）
-    retract_start_ms: float  # 推嘴开始缩回时刻（=拾取+1齿距−提前度数，弧段换算）
+    retract_deg: float      # 推嘴开始缩回有效角（= 拉桥柱位置×每齿角 − 延时器
+                            # 提前度数；可为负 = 拾取前）
+    retract_start_ms: float  # 推嘴开始缩回时刻（缩回起点角弧段换算；可为负）
     release_ms: float       # 活塞释放时刻
     window_start_deg: float  # 供蛋窗口开始有效角（含延时器提前度数钳制）
     window_start_ms: float  # 供蛋窗口开始（推嘴完全缩回）
@@ -123,9 +124,13 @@ def build_timeline(cfg: SimConfig, dev: DeviceParams) -> Timeline:
     period_ms = ((360.0 - release_deg + pickup_deg) * msdeg_f
                  + (release_deg - pickup_deg) * msdeg_l)
 
-    # 改装件时序（✅v4.0 角度参数模型）：延时器以两个直接角度参数描述——
+    # 改装件时序（✅v4.0 角度参数模型；✅v4.3 拉桥柱位置参数化）：
+    #         缩回起点角 = 拉桥柱位置 × 每齿角（第 1 颗齿下方 = 0 → 拾取角 0°
+    #         即缩回；params 层未显式覆盖 推嘴缩回起点角 时派生，显式覆盖优先）。
+    #         延时器以两个直接角度参数描述——
     #         提前度数 = 比原拉桥柱更早接触拉桥旗的扇齿转角 → 推嘴开始缩回与
-    #         完全缩回（供蛋窗口开始）提前该角度（钳制 ≥0°，不越到拾取之前）；
+    #         完全缩回（供蛋窗口开始）提前该角度（✅v4.3 起不再钳制 0°：拉桥柱
+    #         位置可为负，缩回允许早于拾取；供蛋窗口开始仍钳制 ≥0°）；
     #         延时度数 = 比原拉桥柱更晚离开拉桥旗的扇齿转角 → 推嘴回位起始/完成
     #         推迟该角度（供蛋窗口加宽、气密就位更晚）。提前/推迟量按所在弧段
     #         转速换算 ms。旧「延时器占孔数」几何模型弃用（36°/孔，默认延时
@@ -133,7 +138,7 @@ def build_timeline(cfg: SimConfig, dev: DeviceParams) -> Timeline:
     #         切拉桥旗使推嘴回位完成提前（气密更早就位，供蛋窗口不变）
     adv_deg = (dev.delay_advance_deg if cfg.install_delay else 0.0)
     hold_deg = (dev.delay_hold_deg if cfg.install_delay else 0.0)
-    retract_deg = max(dev.cam_retract_start_deg - adv_deg, 0.0)
+    retract_deg = dev.cam_retract_start_deg - adv_deg
     wstart_deg = max(dev.cam_retract_end_deg - adv_deg, 0.0)
     retract_start_ms = _t(retract_deg)
     window_start_ms = _t(wstart_deg)

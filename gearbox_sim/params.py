@@ -237,9 +237,16 @@ def load_config(data: dict) -> SimConfig:
         raise ConfigError("开孔段保留系数 必须是 0~1 的数字"
                           "（0=开孔段全漏，1=完全不漏），实际为: %r" % port_ret)
 
+    # 拉桥柱位置（✅v4.3）：未显式覆盖 推嘴缩回起点角 时，缩回起点角按
+    # 「拉桥柱位置 × 每齿扇齿角」派生（第 1 颗齿下方 = 0 → 拾取角 0° 即缩回，
+    # 负值 = 拾取前）；显式覆盖 推嘴缩回起点角 优先（拉桥柱位置不参与计算）
+    dev_over = data.get("器件参数覆盖") or {}
+    if "推嘴缩回起点角" not in dev_over:
+        cfg.device.cam_retract_start_deg = (cfg.device.cam_pillar_tooth
+                                            * cfg.device.sector_pitch_deg)
+
     # 弹簧预压一致性（v0.6.7）：预压未显式覆盖时按「自由长度 − 装配长度」派生，
     # 避免只覆盖长度参数后预压与报告显示不一致；显式覆盖的预压优先
-    dev_over = data.get("器件参数覆盖") or {}
     if "弹簧预压mm" not in dev_over:
         cfg.device.spring_preload_mm = (cfg.device.spring_free_length_mm
                                         - cfg.device.spring_installed_length_mm)
