@@ -139,7 +139,7 @@ def simulate_payload(data: dict) -> dict:
             "feed_max_rps": cfg.feed_max_rps,
             "air_index": dyn.air_index, "t_fire_ms": bal.t_fire_ms,
             "energy_mj": dyn.energy_mj, "v_release_m_s": dyn.v_release_m_s,
-            "v_impact_m_s": bal.v_impact_m_s, "p_max_kpa": bal.p_max_kpa,
+            "v_impact_m_s": bal.v_impact_m_s,
             "loaded_rpm": tl.loaded_rpm, "motor_desc": tl.motor_desc,
             "motor_stall": tl.motor_stall,
             "torque_peak_ratio": tl.torque_peak_ratio,

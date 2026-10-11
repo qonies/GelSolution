@@ -1009,6 +1009,23 @@ check("事件表：缩回/窗口开始显示有效角（12°−6°=6°、50°−
       and "提前" in re_ev["desc"]
       and abs(ws_ev["angle"] - 44.0) < 1e-9)
 
+# ---- 26. v0.9.2 回归：负载系数范围校验（0.1~1.0，与 FR-02 / 网页输入框对齐）----
+for _bad in (1.5, 0.05, -0.2):
+    try:
+        load_config(json.loads(json.dumps(
+            {"电机": {"标称转速RPM": 30000, "负载系数": _bad}})))
+        check("负载系数 %g → 报错" % _bad, False, "未报错")
+    except ConfigError as e:
+        check("负载系数 %g → 报错" % _bad,
+              "负载系数" in str(e) and "0.1~1.0" in str(e), str(e))
+_cfg_lo = load_config(json.loads(json.dumps(
+    {"电机": {"标称转速RPM": 30000, "负载系数": 0.1}})))
+check("负载系数 0.1（下限）→ 通过", _cfg_lo.load_factor == 0.1)
+_cfg_hi = load_config(json.loads(json.dumps(
+    {"电机": {"标称转速RPM": 30000, "负载系数": 1.0}})))
+check("负载系数 1.0（上限）→ 通过", _cfg_hi.load_factor == 1.0)
+
+print()
 print()
 if FAILS:
     print("失败 %d 项: %s" % (len(FAILS), FAILS))

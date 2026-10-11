@@ -7,7 +7,7 @@
 需要切拉桥旗。
 
 ## 文档
-- [需求文档/需求基线.md](需求文档/需求基线.md) — 当前需求基线 v3.8（已确认需求、
+- [需求文档/需求基线.md](需求文档/需求基线.md) — 当前需求基线 v4.2（已确认需求、
   硬件基准、判定规则、验收标准与变更记录）。需求变更请先更新基线再改代码。
 - [docs/校准指南.md](docs/校准指南.md) — 器件参数实测校准指南（工具清单、
   分优先级测试方法、气动效率/保留系数反标流程、凸轮槽角度与回弹系数实测、
@@ -43,7 +43,7 @@ python webui.py --no-browser   # 不自动开浏览器
 python run.py                              # 用 configs/default.json
 python run.py -c configs/examples/high_rof.json       # 高射速配置
 python run.py -c configs/examples/rear_cut_heavy.json # 重后切配置
-python tests/test_sim.py                   # 引擎自检测试（216项）
+python tests/test_sim.py                   # 引擎自检测试（221项）
 python tests/test_webapp.py                # 网页接口测试（21项）
 ```
 
@@ -256,7 +256,7 @@ gearbox_sim/          模拟引擎包
   web/index.html      网页前端（单文件，原生 JS，实时调参）
   cli.py              命令行入口
 configs/              默认配置、示例与界面预设（presets/<分区>/<名称>.json）
-tests/                test_sim.py（引擎216项）/ test_webapp.py（接口21项）
+tests/                test_sim.py（引擎221项）/ test_webapp.py（接口21项）
 run.py                命令行入口
 webui.py              网页界面入口
 docs/                 附加文档（校准指南）

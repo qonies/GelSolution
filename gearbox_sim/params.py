@@ -102,7 +102,8 @@ def load_config(data: dict) -> SimConfig:
                           % (int(RPM_MAX), rpm))
 
     # 负载系数：曲线模式（选型号）固定为 1（✅用户确认：选型后不可修改）；
-    # 固定转速模式（未选型号）默认 0.8，可显式覆盖
+    # 固定转速模式（未选型号）默认 0.8，可显式覆盖，范围 0.1~1.0（✅v0.9.2
+    # 校验，与 FR-02 / 网页输入框 0.1~1.0 对齐）
     lf_raw = motor.get("负载系数", None)
     if motor_model:
         if lf_raw is not None:
@@ -113,8 +114,9 @@ def load_config(data: dict) -> SimConfig:
     else:
         load_factor = _require_number(0.8 if lf_raw is None else lf_raw,
                                       "电机.负载系数")
-        if load_factor <= 0:
-            raise ConfigError("电机.负载系数 必须大于 0")
+        # ✅v0.9.2：范围 0.1~1.0（此前仅校验 >0，填 1.5 会被当作加速系数静默接受）
+        if not 0.1 <= load_factor <= 1.0:
+            raise ConfigError("电机.负载系数 需在 0.1~1.0 之间，实际为: %r" % lf_raw)
 
     # 电池（可选；须在电机曲线模式下使用；缺省项按 3S / 1400mAh / 30C 补齐）
     batt = data.get("电池") or {}
