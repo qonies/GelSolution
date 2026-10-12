@@ -60,8 +60,8 @@ cfg = make_cfg(front_cut=2, rear_cut=2)
 tl = build_timeline(cfg, cfg.device)
 check("前切2 → 拾取角 24°", abs(tl.pickup_deg - 24.0) < 1e-9)
 check("后切2 → 释放角 168°", abs(tl.release_deg - 168.0) < 1e-9)
-check("行程 = 10/14 满行程（咬合 14 齿基准，前2后2剩10）",
-      abs(tl.stroke_mm - 60.5 * 10 / 14) < 1e-9)
+check("行程 = 12/14 满行程（✅v4.10 口径：剩余咬合 = min(现存蛋糕齿 16−2−2, 天梯 14) = 12）",
+      abs(tl.stroke_mm - 60.5 * 12 / 14) < 1e-9)
 check("凸轮事件不随切齿移动（✅v4.6 实测基准：回位完成 160°）",
       abs(tl.seat_ms - 160.0 / 360.0 * 32.0) < 1e-9)
 
@@ -98,7 +98,9 @@ check("打齿判定为警告或危险", lv["打齿风险"] in (LEVEL_WARN, LEVEL
 # 开孔段部分漏气（有漏非全漏）→ 活塞盖孔瞬间弹后压力已建立（>1.1 大气压）
 # → 压力建立时刻提前至盖孔时刻；✅v4.6 实测基准（回位完成 160°，seat 较旧
 # 估算 164.4° 提前 0.39ms）→ 后切4 三种缸型为临界警告（裕量 +0.07~+0.48），
-# 后切5 起转危险；裕量排序保持：100%缸 < 70%缸 < 50%缸（盖孔越晚裕量越大）
+# 后切5 起转危险；✅v4.10 咬合口径更正（剩余咬合 = min(现存蛋糕齿, 天梯计整齿)）
+# 后切4 → 剩余咬合 min(14, 12) = 12、行程比 12/14：70%/50% 缸的 p_rise 均提前
+# 至开孔段内（裕量相同 0.57ms），100% 缸仍最紧（0.14ms）
 cfg = make_cfg(rear_cut=4, cylinder="100%")
 tl, dyn, feed, bal, checks = full(cfg)
 sm = bal.p_rise_ms - tl.seat_ms
@@ -126,8 +128,8 @@ lv = {c.name: c.level for c in checks}
 check("后切4+50%缸 → 气密临界警告（孔位居中，裕量 +0.48ms 最宽）",
       lv["气密时序"] == LEVEL_WARN and sm50 >= 0.0,
       "level=%s margin=%.2f" % (lv["气密时序"], sm50))
-check("气密裕量排序保持：100%缸 < 70%缸 < 50%缸（盖孔越晚裕量越大）",
-      sm < sm70 < sm50, "%.2f < %.2f < %.2f" % (sm, sm70, sm50))
+check("气密裕量排序保持：100%缸最早转危险（70%/50% 缸 p_rise 在开孔段内、裕量相同）",
+      sm < sm70 and sm <= sm50, "%.2f < %.2f ≤ %.2f" % (sm, sm70, sm50))
 
 # ---- 6. 压气匹配（水桶效应：min(气缸系数, 行程比)，切齿不叠加缩减）----
 cfg = make_cfg(cylinder="50%", front_cut=1, rear_cut=1)
@@ -138,10 +140,11 @@ check("50%缸 轻切齿 → 压气不足警告（水桶上限 0.5 < 0.6）",
 check("50%缸 压气指数 = min(0.5, 行程比)",
       abs(dyn.air_index - min(0.5, tl.stroke_ratio)) < 1e-9)
 
-cfg = make_cfg(front_cut=3, rear_cut=3)   # 70% 缸：行程比 8/14≈0.571 < 0.7 → 全程密封
+cfg = make_cfg(front_cut=4, rear_cut=4)   # 70% 缸：✅v4.10 口径 剩余咬合 min(14, 16−8)=8
+                                          # → 行程比 8/14≈0.571 < 0.7 → 全程密封
 tl, dyn, feed, bal, checks = full(cfg)
 lv = {c.name: c.level for c in checks}
-check("70%缸 前后各切3 → 压气匹配警告（行程比 0.571 < 0.6；水桶口径 min(0.7, 行程比) 不变）",
+check("70%缸 前后各切4 → 压气匹配警告（行程比 0.571 < 0.6；水桶口径 min(0.7, 行程比) 不变）",
       lv["压气匹配"] == LEVEL_WARN
       and abs(dyn.air_index - min(0.7, tl.stroke_ratio)) < 1e-9,
       "air_index=%.3f" % dyn.air_index)
@@ -524,9 +527,9 @@ check("默认满压长度 = 装配长 − 满行程（102.5−60.5=42.0）",
       "满压=%.1f mm" % d0.spring_compressed_length_mm)
 cfg = make_cfg(rear_cut=4)
 tl, dyn, feed, bal, checks = full(cfg)
-check("切齿后拉满长度 = 装配长 − 实际行程（随切齿派生，咬合 14 齿基准）",
+check("切齿后拉满长度 = 装配长 − 实际行程（随切齿派生，✅v4.10 口径 后切4 剩余咬合 12）",
       abs((cfg.device.spring_installed_length_mm - tl.stroke_mm)
-          - (102.5 - 60.5 * 10 / 14)) < 1e-9,
+          - (102.5 - 60.5 * 12 / 14)) < 1e-9,
       "拉满=%.3f mm（行程 %.3f）" % (cfg.device.spring_installed_length_mm - tl.stroke_mm,
                                      tl.stroke_mm))
 
@@ -709,14 +712,14 @@ check("11.5 计 12 齿 → 行程 = 12/14×60.5",
 check("11.5 行程比 = 12/14", abs(tl115.stroke_ratio - 12.0 / 14.0) < 1e-9)
 cfg115r = make_cfg(rear_cut=5); cfg115r.device.tappet_teeth = 11.5
 tl115r = build_timeline(cfg115r, cfg115r.device)
-check("11.5 + 后切5 → 剩余 7 齿、行程 = 7/14×60.5",
-      abs(tl115r.remain_teeth - 7) < 1e-9
-      and abs(tl115r.stroke_mm - 7.0 / 14.0 * 60.5) < 1e-9,
+check("11.5 + 后切5 → 剩余咬合 min(12, 16−5) = 11、行程 = 11/14×60.5（✅v4.10 口径）",
+      abs(tl115r.remain_teeth - 11) < 1e-9
+      and abs(tl115r.stroke_mm - 11.0 / 14.0 * 60.5) < 1e-9,
       "行程=%.3f mm" % tl115r.stroke_mm)
-cfg115c = make_cfg(front_cut=2, rear_cut=4); cfg115c.device.tappet_teeth = 11.5
+cfg115c = make_cfg(front_cut=6, rear_cut=4); cfg115c.device.tappet_teeth = 11.5
 _, _, _, _, checks115c = full(cfg115c)
 lv115c = {c.name: c.level for c in checks115c}
-check("11.5 + 前2后4 → 剩余 6 齿 → 啮合齿数危险（%g 格式化正常）",
+check("11.5 + 前6后4 → 剩余咬合 min(12, 6) = 6 齿 → 啮合齿数危险（%g 格式化正常）",
       lv115c["啮合齿数"] == LEVEL_DANGER)
 cfglong = make_cfg(); cfglong.device.tappet_teeth = 16.0
 tllong = build_timeline(cfglong, cfglong.device)
@@ -1212,6 +1215,75 @@ check("负载系数 0.1（下限）→ 通过", _cfg_lo.load_factor == 0.1)
 _cfg_hi = load_config(json.loads(json.dumps(
     {"电机": {"标称转速RPM": 30000, "负载系数": 1.0}})))
 check("负载系数 1.0（上限）→ 通过", _cfg_hi.load_factor == 1.0)
+
+# ---- 29. v0.9.9 回归：2号延时器实测接入（docs/齿轮测试-2.txt）----
+# 超力18比直斜齿（柱位0/常规拉桥）加装 2号延时器实测（与齿轮测试-1 无延时器
+# 基线同条件对比）：接触 −30°、完全缩回（最大幅度开始）+40° 不变；最大幅度
+# 结束 +60°→+100°、柱旗脱离 +160°→+200°（均 +40°）——即 提前度数 0° /
+# 延时度数 40°，由现有 delay_hold_deg 延时模型直接复现（引擎逻辑无改动）
+cfg18d = load_config(json.loads(json.dumps(
+    {"电机": {"标称转速RPM": 30000, "负载系数": 1.0}, "齿轮比": "18:1",
+     "器件参数覆盖": {"拉桥柱位置": 0, "拉桥旗接触提前角": 30.0,
+                      "推嘴完全缩回角": 40.0, "推嘴回位起始角": 60.0,
+                      "推嘴回位完成角": 160.0, "延时器提前度数": 0.0,
+                      "延时器延时度数": 40.0}})))
+tl18d = build_timeline(cfg18d, cfg18d.device)
+check("2号延时器实测：接触（缩回起点 −30°）与完全缩回（+40°）不受延时器影响",
+      abs(cfg18d.device.cam_retract_start_deg + 30.0) < 1e-9
+      and abs(cfg18d.device.cam_retract_end_deg - 40.0) < 1e-9
+      and abs(tl18d.window_start_ms - tl18.window_start_ms) < 1e-9)
+check("2号延时器实测：回位起始（最大幅度结束）60°→100°、柱旗脱离 160°→200°（各推迟 40°）",
+      abs(tl18d.window_end_deg - 100.0) < 1e-9
+      and abs(tl18d.seat_deg - 200.0) < 1e-9)
+check("2号延时器实测：供蛋窗口 20°→60°（固定30000RPM×18:1 周期36ms → 6.0 ms）",
+      abs(tl18d.window_end_ms - tl18d.window_start_ms - 6.0) < 1e-9)
+check("2号延时器实测：delay_ms = 40° 弧段（4.0 ms）、advance_ms = 0、install_delay 派生",
+      abs(tl18d.delay_ms - 4.0) < 1e-9 and abs(tl18d.advance_ms) < 1e-9
+      and cfg18d.install_delay)
+f18d = evaluate(cfg18d, tl18d)
+check("2号延时器实测：喷嘴未密闭 23.0 ms（−30° 缩回 → 200° 气密就位，基线 19.0 ms）",
+      abs(f18d.nozzle_open_ms - 23.0) < 1e-6)
+# 「改装」预设「2号延时器」（提前 0°/延时 40°）并入配置可解析且生效
+with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                       "configs", "presets", "改装", "2号延时器.json"),
+          encoding="utf-8") as _fd2:
+    _d2 = json.load(_fd2)
+cfgp_d2 = load_config(json.loads(json.dumps(
+    {"电机": {"标称转速RPM": 30000}, "器件参数覆盖": dict(_d2)})))
+check("改装预设「2号延时器」：延时 40° / 提前 0° 生效（度数非零即已配置）",
+      cfgp_d2.device.delay_hold_deg == 40.0
+      and cfgp_d2.device.delay_advance_deg == 0.0 and cfgp_d2.install_delay)
+
+# ---- 30. v0.9.10 回归：咬合口径更正（✅用户更正：切齿切的是蛋糕齿，天梯齿不变
+# → 剩余咬合 = min(现存蛋糕齿 = 扇齿满啮合 − 前切 − 后切, 天梯计整齿)，
+# 取代旧「咬合上限 14 − 前切 − 后切」错误口径）----
+# 前切3+后切4：现存蛋糕齿 16−7 = 9 → 剩余咬合 min(14, 9) = 9（旧口径误算 14−7=7）
+cfgf34 = make_cfg(front_cut=3, rear_cut=4)
+tlf34 = build_timeline(cfgf34, cfgf34.device)
+check("前3后4：剩余咬合 = min(现存蛋糕齿 9, 天梯 14) = 9、行程 = 9/14×60.5 = 38.893mm",
+      abs(tlf34.remain_teeth - 9) < 1e-9
+      and abs(tlf34.stroke_mm - 9.0 / 14.0 * 60.5) < 1e-9,
+      "行程=%.3f mm" % tlf34.stroke_mm)
+check("前3后4：时序不受咬合口径影响（拾取 36° / 释放 144°，凸轮事件固定于扇齿）",
+      abs(tlf34.pickup_deg - 36.0) < 1e-9 and abs(tlf34.release_deg - 144.0) < 1e-9)
+# 切齿合计 ≤2（现存蛋糕齿 ≥ 天梯咬合 14）→ 满行程不减，切齿仅移动拾取/释放时序
+cfgf2 = make_cfg(front_cut=2)
+tlf2 = build_timeline(cfgf2, cfgf2.device)
+check("前切2：现存蛋糕齿 14 ≥ 天梯咬合 14 → 满行程 60.5（仅拾取推迟 24°）",
+      abs(tlf2.remain_teeth - 14) < 1e-9 and abs(tlf2.stroke_mm - 60.5) < 1e-9
+      and abs(tlf2.pickup_deg - 24.0) < 1e-9)
+# min 双向钳制：超短天梯（11.5 计 12）时咬合上限同样生效
+cfgt12 = make_cfg(front_cut=2, rear_cut=2); cfgt12.device.tappet_teeth = 11.5
+tlt12 = build_timeline(cfgt12, cfgt12.device)
+check("天梯 11.5 + 前2后2：剩余咬合 = min(12, 12) = 12、行程 12/14×60.5",
+      abs(tlt12.remain_teeth - 12) < 1e-9
+      and abs(tlt12.stroke_mm - 12.0 / 14.0 * 60.5) < 1e-9)
+# 极限：前6后6（现存蛋糕齿 4）→ 剩余咬合 4、行程比 4/14
+cfgf66 = make_cfg(front_cut=6, rear_cut=6)
+tlf66 = build_timeline(cfgf66, cfgf66.device)
+check("前6后6：剩余咬合 = 4、行程 = 4/14×60.5",
+      abs(tlf66.remain_teeth - 4) < 1e-9
+      and abs(tlf66.stroke_mm - 4.0 / 14.0 * 60.5) < 1e-9)
 
 print()
 print()

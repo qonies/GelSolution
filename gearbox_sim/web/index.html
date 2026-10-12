@@ -141,7 +141,7 @@ tr.hl td{background:#eaf1ff}
   </div>
 
   <div class="psec">
-    <div class="psec-h"><b>延时器</b></div>
+    <div class="psec-h"><b>延时器</b><select id="preset_改装" class="psel"><option value="">自定义</option></select></div>
     <div class="group"><label style="font-size:12px;color:var(--sub)">✅度数非零即视为已安装延时器并直接影响供弹窗口（提前 → 窗口开始提前、延时 → 窗口结束推迟；切旗后延时度数仍生效）；旧「安装延时器」开关已废弃</label></div>
     <div class="group duo">
       <div><label>提前度数 °（更早接触拉桥旗的转角：缩回/供蛋窗口开始提前）</label><input type="number" id="dvDelayAdv" step="1"></div>
@@ -416,7 +416,7 @@ function render(d){
 
 /* ---- 参数分区预设（configs/presets/<分区>/<名称>.json，GET /api/presets 下发；
    选择预设 = 整区载入（未列出的参数恢复默认），手动修改任意输入自动转「自定义」） ---- */
-const SECS = ["电机", "齿轮", "电池", "气缸", "弹簧"];
+const SECS = ["电机", "齿轮", "电池", "气缸", "弹簧", "改装"];
 let PRESETS = {};
 function devDef(k){return DEVDEF[k]!=null?DEVDEF[k]:"";}
 function applyPreset(sec,name){
@@ -457,6 +457,9 @@ function applyPreset(sec,name){
     $("dvStroke").value=(m["活塞满行程mm"]!=null)?m["活塞满行程mm"]:devDef("活塞满行程mm");
     $("dvPistonMass").value=(m["活塞质量g"]!=null)?m["活塞质量g"]:devDef("活塞质量g");
     $("dvResti").value=(m["撞击回弹系数"]!=null)?m["撞击回弹系数"]:devDef("撞击回弹系数");
+  }else if(sec==="改装"){
+    $("dvDelayAdv").value=(m["延时器提前度数"]!=null)?m["延时器提前度数"]:devDef("延时器提前度数");
+    $("dvDelayHold").value=(m["延时器延时度数"]!=null)?m["延时器延时度数"]:devDef("延时器延时度数");
   }
   syncSliders();schedule();
 }

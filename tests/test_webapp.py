@@ -97,7 +97,7 @@ except urllib.error.HTTPError as e:
 
 # ---- 参数分区预设（GET /api/presets，configs/presets/<分区>/<名称>.json）----
 pr = json.loads(urllib.request.urlopen(base + "/api/presets", timeout=5).read().decode("utf-8"))
-check("GET /api/presets 五个分区", set(pr.keys()) == {"电机", "齿轮", "电池", "气缸", "弹簧"})
+check("GET /api/presets 六个分区", set(pr.keys()) == {"电机", "齿轮", "电池", "气缸", "弹簧", "改装"})
 check("预设均有名称且参数为对象",
       all(isinstance(p.get("参数"), dict) and p.get("名称")
           for sec in pr.values() for p in sec),
@@ -107,6 +107,9 @@ check("电机预设含 4 款曲线电机",
       <= {p["名称"] for p in pr["电机"]})
 check("弹簧预设自然排序（M75 < M100）",
       [p["名称"] for p in pr["弹簧"]][:3] == ["M75", "M80", "M85"])
+check("改装预设含 2号延时器（延时 40°，✅v4.9 docs/齿轮测试-2.txt 实测标定）",
+      any(p["名称"] == "2号延时器" and p["参数"].get("延时器延时度数") == 40.0
+          and p["参数"].get("延时器提前度数") == 0.0 for p in pr["改装"]))
 
 # 全部预设并入默认配置须可解析（空预设如「不启用」跳过；电池预设须配曲线模式电机）
 merge_ok, bad, merged = True, "", 0
@@ -139,6 +142,10 @@ for sec, items in pr.items():
         elif sec == "弹簧":
             cfg["弹簧"] = m["弹簧"]
             for k in ("弹簧预压mm", "活塞满行程mm", "活塞质量g", "撞击回弹系数"):
+                if k in m:
+                    cfg["器件参数覆盖"][k] = m[k]
+        elif sec == "改装":
+            for k in ("延时器提前度数", "延时器延时度数"):
                 if k in m:
                     cfg["器件参数覆盖"][k] = m[k]
         try:

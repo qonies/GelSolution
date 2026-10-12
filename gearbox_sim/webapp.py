@@ -64,7 +64,7 @@ for _k in ("推嘴缩回起点角", "推嘴完全缩回角",
 # ---- 参数分区预设（✅v0.8.0 用户需求：分区下拉选择预设参数文件或自定义） ----
 PRESETS_DIR = os.path.normpath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)), os.pardir, "configs", "presets"))
-PRESET_SECTIONS = ["电机", "齿轮", "电池", "气缸", "弹簧"]
+PRESET_SECTIONS = ["电机", "齿轮", "电池", "气缸", "弹簧", "改装"]
 
 
 def _natural_key(name: str) -> list:

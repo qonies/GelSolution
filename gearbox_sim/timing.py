@@ -93,11 +93,15 @@ def build_timeline(cfg: SimConfig, dev: DeviceParams) -> Timeline:
                                                       # ✅v3.9 每齿 12°：15 齿距占 180°）
     pickup_deg = cfg.front_cut * pitch                # 前切 → 拾取推迟
     release_deg = full_arc - cfg.rear_cut * pitch     # 后切 → 提前释放
-    # 蛋糕齿实际可咬合的天梯齿数（天梯齿数，半齿计整齿）：咬合 = min(扇齿满
-    # 啮合, ceil(天梯齿数))；剩余咬合齿数决定实际拉程——原装咬合 14 齿对应
-    # 满行程实测 60.5mm，拉程 = 满行程 × min(剩余咬合, 14) / 14（封顶满行程）
+    # 蛋糕齿（扇齿）实际咬合齿数（✅v4.10 用户口径更正）：切齿切的是蛋糕齿，
+    # 天梯齿不减少 → 剩余咬合 = min(现存蛋糕齿 = 扇齿满啮合 − 前切 − 后切,
+    # 天梯计整齿)。咬合基准：原装咬合 14 齿对应满行程实测 60.5mm，
+    # 拉程 = 满行程 × min(剩余咬合, 14) / 14（封顶满行程）——切齿合计 ≤2 齿时
+    # （现存蛋糕齿 ≥ 天梯咬合 14）行程不减、仅移动拾取/释放时序；合计 >2 齿后
+    # 行程随现存蛋糕齿减少，储能/初速下降、电机负载减轻
     bite = dev.tappet_bite()
-    remain = bite - cfg.front_cut - cfg.rear_cut
+    sector_left = dev.sector_full_teeth - cfg.front_cut - cfg.rear_cut
+    remain = min(bite, max(sector_left, 0))
 
     stroke_ratio = min(max(remain, 0), TAPPET_STOCK_BITE) / TAPPET_STOCK_BITE
     stroke_mm = dev.piston_full_stroke_mm * stroke_ratio

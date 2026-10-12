@@ -110,9 +110,12 @@ def resolve_loaded_rpm(cfg, dev):
         return cfg.motor_rpm * cfg.load_factor, None, None
 
     m = MOTOR_CURVES[cfg.motor_model]
-    # 咬合齿数（半齿计整齿）与拉程比例：原装咬合 14 齿对应满行程（封顶）
+    # 咬合齿数（✅v4.10 用户口径更正）：切齿切的是蛋糕齿、天梯齿不减少 →
+    # 剩余咬合 = min(现存蛋糕齿 = 扇齿满啮合 − 前切 − 后切, 天梯计整齿)；
+    # 原装咬合 14 齿对应满行程（封顶）
     bite = min(dev.sector_full_teeth, math.ceil(dev.tappet_teeth))
-    remain_ratio = min(max(bite - cfg.front_cut - cfg.rear_cut, 0),
+    sector_left = dev.sector_full_teeth - cfg.front_cut - cfg.rear_cut
+    remain_ratio = min(max(min(bite, sector_left), 0),
                        TAPPET_STOCK_BITE) / TAPPET_STOCK_BITE
     s = dev.piston_full_stroke_mm / 1000.0 * remain_ratio   # 实际拉程 (m)
     # 扇齿分度圆半径：拉程弧长 ÷ 满拉弧角（弧度）——满拉弧 = 齿数 × 每齿角
