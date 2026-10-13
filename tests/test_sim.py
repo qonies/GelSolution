@@ -1285,6 +1285,37 @@ check("前6后6：剩余咬合 = 4、行程 = 4/14×60.5",
       abs(tlf66.remain_teeth - 4) < 1e-9
       and abs(tlf66.stroke_mm - 4.0 / 14.0 * 60.5) < 1e-9)
 
+# ---- 31. v0.9.11 回归：新增齿比 9:1 / 11:1（✅用户需求）----
+for _r, _rv in (("9:1", 9.0), ("11:1", 11.0)):
+    cfgr = load_config(json.loads(json.dumps(
+        {"电机": {"标称转速RPM": 30000, "负载系数": 1.0}, "齿轮比": _r})))
+    tlr = build_timeline(cfgr, cfgr.device)
+    check("齿比 %s → ratio_value %.0f、周期 = 60000×%.0f/30000 = %.0f ms（固定模式匀速）"
+          % (_r, _rv, _rv, 60000.0 * _rv / 30000.0),
+          cfgr.ratio == _r and abs(cfgr.ratio_value - _rv) < 1e-9
+          and abs(tlr.period_ms - 60000.0 * _rv / 30000.0) < 1e-9)
+# 齿轮预设「9比1」「11比1」并入配置可解析（整区载入口径：齿轮比/切齿/天梯齿数）
+for _name in ("9比1", "11比1"):
+    with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "configs", "presets", "齿轮", _name + ".json"),
+              encoding="utf-8") as _fg:
+        _g = json.load(_fg)
+    cfgg = load_config(json.loads(json.dumps(
+        {"电机": {"标称转速RPM": 30000}, "齿轮比": _g["齿轮比"],
+         "切齿": {"前切齿数": _g.get("前切齿数", 0),
+                  "后切齿数": _g.get("后切齿数", 0)},
+         "器件参数覆盖": {"天梯齿数": _g["天梯齿数"]}})))
+    check("齿轮预设「%s」并入配置可解析（齿轮比 %s）" % (_name, _g["齿轮比"]),
+          cfgg.ratio == _g["齿轮比"])
+# 齿轮比错误信息列出全部支持档位
+try:
+    load_config(json.loads(json.dumps(
+        {"电机": {"标称转速RPM": 30000}, "齿轮比": "10:1"})))
+    check("齿轮比 10:1 → 报错", False, "未报错")
+except ConfigError as e:
+    check("齿轮比 10:1 → 报错（列出全部支持档位）",
+          "齿轮比" in str(e) and "9:1" in str(e) and "11:1" in str(e), str(e))
+
 print()
 print()
 if FAILS:

@@ -9,7 +9,8 @@ from .components import (DeviceParams, Thresholds, apply_overrides,
                          CAM_DETACH_OFF_DEG)
 from .motor import MOTOR_MODELS, MOTOR_CURVES
 
-VALID_RATIOS = {"13:1": 13.0, "16:1": 16.0, "18:1": 18.0}
+VALID_RATIOS = {"9:1": 9.0, "11:1": 11.0, "13:1": 13.0, "16:1": 16.0,
+                "18:1": 18.0}   # ✅v4.11 用户新增 9:1 / 11:1
 VALID_SPRINGS = ["M75", "M80", "M85", "M90", "M95", "M100", "M110"]
 VALID_CYLINDERS = ["50%", "60%", "70%", "80%", "100%"]
 VALID_FEED_MODES = ["普通波轮", "高级波轮", "压力弹匣"]

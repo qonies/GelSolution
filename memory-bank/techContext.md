@@ -15,7 +15,7 @@
 ## 运行
 - `python run.py [-c configs/xxx.json]`（命令行报告）
 - `python webui.py [--port 8765] [--no-browser]`（本地网页界面，实时调参）
-- `python tests/test_sim.py`（引擎 261 项）/ `python tests/test_webapp.py`（接口 22 项）
+- `python tests/test_sim.py`（引擎 266 项）/ `python tests/test_webapp.py`（接口 22 项）
 
 ## 电机参数口径（v0.6.4 ✅用户确认）
 - 曲线模式（选 电机.型号）：负载系数固定 1、标称转速RPM 锁定为曲线空载值，
@@ -35,7 +35,7 @@
 
 ## 版本控制
 - git 仓库（2026-09-08 初始化，Windows git）；项目版本号见
-  gearbox_sim/__init__.py（当前 0.9.10）；历史沿革见 activeContext.md
+  gearbox_sim/__init__.py（当前 0.9.11）；历史沿革见 activeContext.md
 - 开源许可：**MIT**（LICENSE 文件，Copyright (c) 2026 qonies）；
   README「许可证」章节含中文说明与「模拟结果仅供参考 + 遵守当地法规」提示
 
